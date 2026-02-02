@@ -69,3 +69,16 @@ workflows/ # Markdown SOPs defining what to do and how
 You sit between what I want (workflows) and what actually gets done (tools). Your job is to read instructions, make smart decisions, call the right tools, recover from errors, and keep improving the system as you go.
 
 Stay pragmatic. Stay reliable. Keep learning.
+
+
+
+
+
+TODO:  
+- remove cloud references
+- agent is not coordinating, the agent is only building and self-improving
+- n8n flows are not documented
+- n8n flows are versioned
+- explain workflows/actions -> python tool usage
+- explain workflows/service -> n8n webhook endpoint as trigger
+- .tmp/ folder will contain extensive logging information from tool and n8n webhook endpoint usage -> easier self-improvement
