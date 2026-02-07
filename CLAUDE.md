@@ -103,7 +103,7 @@ Each markdown SOP in `workflows/` should have a corresponding implementation in 
 |----------|---------------|--------|
 | `workflows/template.md` | **Template for new SOPs** | 📝 Template |
 | `workflows/infra/n8n-sync.md` | `tools/scripts/sync-workflows.sh` | ✅ Implemented |
-| `workflows/n8n-webhook/notify-discord.md` | `tools/n8n-flows/github-discord-notify.json` | 🔨 Deployed (needs activation & testing) |
+| `workflows/n8n-webhook/notify-discord.md` | `tools/n8n-flows/github-discord-notify.json` | ⏸️ Blocked (prerequisite issues) |
 
 **When creating new workflows:**
 1. **Copy the template**: Start with `workflows/template.md` as your base
@@ -198,6 +198,28 @@ Each markdown SOP in `workflows/` should have a corresponding implementation in 
 - Or test manually in n8n UI
 - Always test after import before activating
 - Webhook endpoints: `https://n8n-host/webhook/path-name`
+
+### Deleting Workflows from n8n
+
+Since n8n CLI doesn't have a delete command, use the REST API:
+
+```bash
+# Login and get session cookie
+N8N_HOST="https://n8n.labs.lair.nntin.xyz"
+COOKIE_FILE=$(mktemp)
+curl -s -c "$COOKIE_FILE" -X POST "${N8N_HOST}/rest/login" \
+  -H "Content-Type: application/json" \
+  -d "{\"emailOrLdapLoginId\":\"$N8N_EMAIL\",\"password\":\"$N8N_PASSWORD}\"}"
+
+# Delete workflow by ID
+WORKFLOW_ID="workflow-id-here"
+curl -s -b "$COOKIE_FILE" -X DELETE "${N8N_HOST}/rest/workflows/${WORKFLOW_ID}"
+
+# Cleanup
+rm -f "$COOKIE_FILE"
+```
+
+**Note**: Login requires `emailOrLdapLoginId` field, not `email`. Successful delete returns `{"data":true}`.
 
 ### n8n Workflow Implementation Best Practices
 

@@ -1,5 +1,11 @@
 {
+  "updatedAt": "2026-02-07T21:02:52.841Z",
+  "createdAt": "2026-02-07T21:02:52.841Z",
+  "id": "github-discord-notify",
   "name": "GitHub to Discord Notification",
+  "description": null,
+  "active": true,
+  "isArchived": false,
   "nodes": [
     {
       "parameters": {
@@ -14,7 +20,10 @@
       "name": "Webhook Trigger",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [250, 300],
+      "position": [
+        250,
+        300
+      ],
       "webhookId": "github-discord-webhook"
     },
     {
@@ -27,7 +36,10 @@
       "name": "Validate Signature",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [450, 300]
+      "position": [
+        450,
+        300
+      ]
     },
     {
       "parameters": {
@@ -39,7 +51,10 @@
       "name": "Extract Event Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [650, 300]
+      "position": [
+        650,
+        300
+      ]
     },
     {
       "parameters": {
@@ -51,7 +66,10 @@
       "name": "Log Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [850, 300],
+      "position": [
+        850,
+        300
+      ],
       "continueOnFail": true
     },
     {
@@ -64,7 +82,10 @@
       "name": "Format Discord Message",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1050, 300]
+      "position": [
+        1050,
+        300
+      ]
     },
     {
       "parameters": {
@@ -95,7 +116,10 @@
       "name": "Send to Discord",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1250, 300]
+      "position": [
+        1250,
+        300
+      ]
     },
     {
       "parameters": {
@@ -107,7 +131,10 @@
       "name": "Format Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1450, 300]
+      "position": [
+        1450,
+        300
+      ]
     }
   ],
   "connections": {
@@ -178,14 +205,36 @@
       ]
     }
   },
-  "id": "github-discord-notify",
-  "active": false,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": null,
+  "staticData": null,
   "meta": {
     "instanceId": "n8n-labs-lair-nntin-xyz"
   },
-  "tags": []
+  "pinData": null,
+  "versionId": "f23cfe8d-299c-4164-ad7c-6f86198bf899",
+  "activeVersionId": "f23cfe8d-299c-4164-ad7c-6f86198bf899",
+  "versionCounter": 4,
+  "triggerCount": 1,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-02-07T21:02:52.848Z",
+      "createdAt": "2026-02-07T21:02:52.848Z",
+      "role": "workflow:owner",
+      "workflowId": "github-discord-notify",
+      "projectId": "dSnNZv7zF1AxLQD6",
+      "project": {
+        "updatedAt": "2026-01-24T12:56:35.595Z",
+        "createdAt": "2026-01-23T22:48:06.540Z",
+        "id": "dSnNZv7zF1AxLQD6",
+        "name": "Tin Nguyen <nguyen.ngoctindaniel@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "83ee6f71-c12c-418b-91c6-9096f2edc160"
+      }
+    }
+  ]
 }
