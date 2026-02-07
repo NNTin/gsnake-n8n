@@ -39,6 +39,13 @@ When you hit an error:
 **3. Keep workflows current**
 Workflows should evolve as you learn. When you find better methods, discover certain contraints, or encounter recurring issues, update the workflow. That said, don't create or overwrite workflows without asking unless I explicitely tell you to. These are your instructions and need to be preserved and refined, not tossed after one use.
 
+**4. Use the template for new SOPs**
+When creating a new SOP, start with `workflows/template.md`. The template is structured to capture all information needed for implementation without ambiguity. Fill in all applicable sections - this ensures:
+- No critical details are missed (credentials, error handling, security)
+- Tools can be implemented without follow-up questions
+- Future debugging is easier with comprehensive documentation
+- Consistent structure across all SOPs makes the system easier to navigate
+
 ## The Self-Improvement Loop
 
 Every failure is a chance to make the system stronger:
@@ -94,16 +101,29 @@ Each markdown SOP in `workflows/` should have a corresponding implementation in 
 
 | SOP File | Implementation | Status |
 |----------|---------------|--------|
+| `workflows/template.md` | **Template for new SOPs** | 📝 Template |
 | `workflows/infra/n8n-sync.md` | `tools/scripts/sync-workflows.sh` | ✅ Implemented |
 | `workflows/n8n-webhook/notify-discord.md` | `tools/n8n-flows/{workflow-id}.json` | ⏳ To be created |
 
 **When creating new workflows:**
-1. Write/update the SOP in `workflows/` (define WHAT and WHY)
-2. Generate/author n8n workflow JSON
-3. Save to `tools/n8n-flows/{workflow-id}.json`
-4. Run `./tools/scripts/sync-workflows.sh import` to deploy
-5. Test via n8n MCP server or UI
-6. Commit both SOP and JSON to git
+1. **Copy the template**: Start with `workflows/template.md` as your base
+   - Fill in the YAML frontmatter (implementation_status, tool_type, tool_location, etc.)
+   - Complete all relevant sections - the template ensures no critical information is missing
+   - Delete sections that don't apply (e.g., if not using webhooks, remove webhook-specific sections)
+   - The template is designed so tools can be implemented without open questions
+2. **Save your SOP** in the appropriate subdirectory:
+   - `workflows/n8n-webhook/` for webhook endpoints
+   - `workflows/n8n-nodes/` for custom node specs
+   - `workflows/infra/` for infrastructure/deployment workflows
+3. **Generate/author the implementation** (n8n workflow JSON or shell script)
+4. **Save to tools/** at the location specified in your SOP's frontmatter
+   - n8n workflows: `tools/n8n-flows/{workflow-id}.json`
+   - Scripts: `tools/scripts/{script-name}.sh`
+5. **Deploy** (for n8n workflows): Run `./tools/scripts/sync-workflows.sh import`
+6. **Test** via n8n MCP server, UI, or direct execution
+7. **Update the SOP** with any learnings from implementation/testing
+8. **Update frontmatter**: Set `implementation_status: implemented` and `last_updated`
+9. **Commit** both SOP and implementation to git
 
 **Note**: The old docker volume sync approach (mounting n8n data directory) has been replaced with n8n CLI import/export. See `gsnake-specs/n8n/architecture-decision.md` for details.
 
