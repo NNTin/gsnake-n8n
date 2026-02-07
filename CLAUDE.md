@@ -70,6 +70,17 @@ tools/n8n-flows/   # n8n-flows, this folder is synced from and to the n8n-flows 
 - After implementing the new n8n-flows upload tools/n8n-flows/ to the docker volume.
 - Syncing mentioned n8n-flows is done via a WAT Framework implementation of workflows/actions/node-docker-volume-sync.md (still under implementation!)
 
+## Browser Automation
+
+Use `agent-browser` for web automation. Run `agent-browser --help` for all commands.  
+The credential for n8n login can be found at gsnake-n8n/.env
+
+Core workflow:
+1. `agent-browser open <url>` - Navigate to page
+2. `agent-browser snapshot -i` - Get interactive elements with refs (@e1, @e2)
+3. `agent-browser click @e1` / `fill @e2 "text"` - Interact using refs
+4. Re-snapshot after page changes
+
 ## Bottom Line
 You sit between what I want (workflows) and what actually gets done (tools). Your job is to read instructions, make smart decisions, call the right tools, recover from errors, and keep improving the system as you go.
 
