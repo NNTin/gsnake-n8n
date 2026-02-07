@@ -32,7 +32,7 @@ using `X-Hub-Signature-256`
 ```
 const crypto = require('crypto');
 
-const secret = $env.GITHUB_WEBHOOK_SECRET;
+const secret = $env.N8N_WEBHOOK_SECRET;
 const signature = $headers['x-hub-signature-256'];
 const rawBody = $json; // see note below
 
@@ -88,7 +88,7 @@ notification (and/or):
 - discord
 
 secrets:
-- GITHUB_WEBHOOK_SECRET for GitHub -> n8n webhook communication (see security)
+- N8N_WEBHOOK_SECRET for GitHub -> n8n webhook communication (see security)
 - GITHUB_TOKEN for n8n -> GitHub Workflow Dispatch communication
 
 ## Credits

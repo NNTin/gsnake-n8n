@@ -1,6 +1,6 @@
 # Agent Instructions
 
-You're working inside the **WAT framework** (Workflows, Agents, Tools). This architecture separates converns so that probabilistic AI handles reasoning while deterministic code handles execution. That separation is what makes this system reliable.
+You're working inside the **WAT framework** (Workflows, Agents, Tools). This architecture separates concerns so that probabilistic AI handles reasoning while deterministic code handles execution. That separation is what makes this system reliable.
 
 ## The WAT Architecture
 
@@ -13,11 +13,11 @@ You're working inside the **WAT framework** (Workflows, Agents, Tools). This arc
 - This is your role. You're responsible for intelligent coordination.
 - Read the relevant workflow, run tools in the correct sequence, handle failures gracefully, and ask clarifying questions when needed
 - You connect intent to execution without trying to do everything yourself
-- Example: If you need to pull data from a website, don't attempt it directly. Read `workflows/scrape_website.md`, figure out the required inputs, then execute `tools/scrape_single_site.py`
+- Example: If you need to sync n8n-flows with self-hosted n8n instance, don't attempt it directly. Read `workflows/actions/n8n-docker-volume-sync.md`, figure out the required inputs, then execute the webhook endpoint at `tools/n8n-flows/`.
 
 **Layer 3: Tools (The Execution)** 
-- Python scripts in `tools/` that do the actual work
-- API calls, data transofmrations, file operations, database queries
+- n8n flows in `tools/` that do the actual work
+- API calls, data transofmrations, file operations, database queries, webhook endponts
 - Credentials and API keys are stored in `.env`
 - These scripts are consistent, testable, and fast
 
@@ -52,33 +52,25 @@ This loop is how the framework improves over time.
 ## File Structure
 
 **What goes where**
-- **Deliverables**: Final outputs go to cloud services (Google Sheets, Slides, etc.) where I can access them directly.  
+- **Deliverables**: Final outputs go to tools/n8n-flows where automations live  
 - **Intermediates**: Temporary processing files that can be regenerated
 
 **Directiory layout**
 ```sh
-.tmp/      # temporary files, regenerated as needed
-tools/     # Python scripts for deterministic execution
-workflows/ # Markdown SOPs defining what to do and how
-.env       # API keys and environment variables (NEVER store secrets anywhere else)
+.tmp/              # temporary files, regenerated as needed
+workflows/actions/ # custom n8n nodes
+workflows/service/ # n8n webhook endpoint that triggers n8n nodes
+tools/n8n-flows/   # n8n-flows, this folder is synced from and to the n8n-flows of the self hosted n8n instance
+.env               # API keys and environment variables (NEVER store secrets anywhere else)
 ```
 
-**Core principle:** Local files are just for processing. Anything I need to see or use lives in cloud services. Everything in `.tmp/` is disposable.
+**Core principle:** 
+- Everything in `.tmp/` is disposable.
+- Before doing work we need to dowload tools/n8n-flows/  
+- After implementing the new n8n-flows upload tools/n8n-flows/ to the docker volume.
+- Syncing mentioned n8n-flows is done via a WAT Framework implementation of workflows/actions/node-docker-volume-sync.md (still under implementation!)
 
 ## Bottom Line
 You sit between what I want (workflows) and what actually gets done (tools). Your job is to read instructions, make smart decisions, call the right tools, recover from errors, and keep improving the system as you go.
 
 Stay pragmatic. Stay reliable. Keep learning.
-
-
-
-
-
-TODO:  
-- remove cloud references
-- agent is not coordinating, the agent is only building and self-improving
-- n8n flows are not documented
-- n8n flows are versioned
-- explain workflows/actions -> python tool usage
-- explain workflows/service -> n8n webhook endpoint as trigger
-- .tmp/ folder will contain extensive logging information from tool and n8n webhook endpoint usage -> easier self-improvement
