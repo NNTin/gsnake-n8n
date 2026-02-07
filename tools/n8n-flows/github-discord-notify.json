@@ -1,0 +1,191 @@
+{
+  "name": "GitHub to Discord Notification",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "github-discord",
+        "responseMode": "onReceived",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "github-discord-webhook"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// HMAC Signature Validation for GitHub Webhooks\nconst crypto = require('crypto');\n\nconst items = $input.all();\nconst firstItem = items[0];\n\n// Get headers and body from webhook\nconst headers = firstItem.json.headers || {};\nconst body = firstItem.json.body;\n\n// Check if this is a localhost request (bypass signature validation)\nconst host = headers['host'] || '';\nconst isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');\n\nif (isLocalhost) {\n  console.log('Localhost request - skipping signature validation');\n  return items;\n}\n\n// Validate GitHub signature for non-localhost requests\nconst secret = $env.N8N_WEBHOOK_SECRET;\nconst signature = headers['x-hub-signature-256'];\n\nif (!signature) {\n  throw new Error('Missing X-Hub-Signature-256 header');\n}\n\nif (!secret) {\n  throw new Error('N8N_WEBHOOK_SECRET environment variable not set');\n}\n\n// Calculate HMAC signature\nconst hmac = crypto\n  .createHmac('sha256', secret)\n  .update(JSON.stringify(body))\n  .digest('hex');\n\nconst expectedSignature = `sha256=${hmac}`;\n\n// Verify signature matches\nif (signature !== expectedSignature) {\n  throw new Error('Invalid GitHub signature');\n}\n\nconsole.log('Signature validated successfully');\nreturn items;"
+      },
+      "id": "validate-signature",
+      "name": "Validate Signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Extract Event Data from GitHub Webhook\nconst items = $input.all();\nconst firstItem = items[0];\n\nconst payload = firstItem.json.body || {};\nconst headers = firstItem.json.headers || {};\nconst eventType = headers['x-github-event'] || 'unknown';\n\n// Build event data object\nconst eventData = {\n  timestamp: new Date().toISOString(),\n  event_type: eventType,\n  delivery_id: headers['x-github-delivery'] || 'unknown',\n  repository: payload.repository?.full_name || 'unknown',\n  sender: payload.sender?.login || 'unknown',\n  raw_payload: payload\n};\n\n// Extract event-specific data\nif (eventType === 'push') {\n  eventData.branch = payload.ref?.replace('refs/heads/', '') || 'unknown';\n  eventData.commits = payload.commits?.length || 0;\n  eventData.head_commit = payload.head_commit || {};\n  eventData.compare_url = payload.compare || '';\n} else if (eventType === 'pull_request') {\n  eventData.action = payload.action || 'unknown';\n  eventData.pr_number = payload.pull_request?.number || 0;\n  eventData.pr_title = payload.pull_request?.title || '';\n  eventData.pr_url = payload.pull_request?.html_url || '';\n  eventData.pr_state = payload.pull_request?.state || '';\n  eventData.pr_merged = payload.pull_request?.merged || false;\n}\n\nreturn [{ json: eventData }];"
+      },
+      "id": "extract-event-data",
+      "name": "Extract Event Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Log Payload to File\nconst fs = require('fs');\nconst path = require('path');\n\nconst items = $input.all();\nconst data = items[0].json;\n\n// Create log directory if it doesn't exist\nconst logDir = '.tmp/n8n-endpoint/github-discord';\nconst timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];\nconst filename = `${timestamp}.json`;\nconst filepath = path.join(logDir, filename);\n\ntry {\n  // Create directory recursively\n  if (!fs.existsSync(logDir)) {\n    fs.mkdirSync(logDir, { recursive: true });\n  }\n  \n  // Write log file\n  fs.writeFileSync(filepath, JSON.stringify(data, null, 2));\n  console.log(`Logged payload to ${filepath}`);\n  \n  return [{\n    json: {\n      ...data,\n      log_file: filepath\n    }\n  }];\n} catch (error) {\n  // Log error but don't fail workflow (logging is non-critical)\n  console.error('Failed to write log file:', error.message);\n  return items;\n}"
+      },
+      "id": "log-payload",
+      "name": "Log Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Format Discord Message\nconst items = $input.all();\nconst data = items[0].json;\nconst eventType = data.event_type;\nconst payload = data.raw_payload || {};\n\nlet discordMessage = '';\n\nif (eventType === 'push') {\n  const branch = data.branch || 'unknown';\n  const commits = payload.commits || [];\n  const sender = payload.sender || {};\n  const repo = payload.repository || {};\n  const compareUrl = data.compare_url || '';\n\n  discordMessage = `🚀 **New Push to \\`${repo.full_name || 'unknown'}\\`**\\n\\n`;\n  discordMessage += `**Branch**: \\`${branch}\\`\\n`;\n  discordMessage += `**Pusher**: [${sender.login || 'unknown'}](${sender.html_url || '#'})\\n\\n`;\n\n  if (commits.length > 0) {\n    discordMessage += `**Commits** (${commits.length}):\\n`;\n    const displayCommits = commits.slice(0, 5);\n    \n    displayCommits.forEach(commit => {\n      const shortSha = (commit.id || 'unknown').substring(0, 7);\n      const message = (commit.message || 'No message').split('\\n')[0];\n      discordMessage += `• [\\`${shortSha}\\`](${commit.url || '#'}) - ${message}\\n`;\n    });\n    \n    if (commits.length > 5) {\n      discordMessage += `• ... and ${commits.length - 5} more commits\\n`;\n    }\n  }\n\n  if (compareUrl) {\n    discordMessage += `\\n[View Diff](${compareUrl})`;\n  }\n\n} else if (eventType === 'pull_request') {\n  const pr = payload.pull_request || {};\n  const action = data.action || 'unknown';\n  const repo = payload.repository || {};\n\n  let emoji = '📬';\n  let actionText = 'Pull Request';\n  \n  if (action === 'closed' && pr.merged) {\n    emoji = '✅';\n    actionText = 'Pull Request Merged';\n  } else if (action === 'closed') {\n    emoji = '❌';\n    actionText = 'Pull Request Closed';\n  } else if (action === 'opened') {\n    emoji = '📬';\n    actionText = 'Pull Request Opened';\n  } else {\n    emoji = '📬';\n    actionText = `Pull Request ${action}`;\n  }\n\n  discordMessage = `${emoji} **${actionText} in \\`${repo.full_name || 'unknown'}\\`**\\n\\n`;\n  discordMessage += `**Title**: ${pr.title || 'No title'}\\n`;\n  discordMessage += `**Author**: [${pr.user?.login || 'unknown'}](${pr.user?.html_url || '#'})\\n`;\n  discordMessage += `**Branch**: \\`${pr.head?.ref || 'unknown'}\\` → \\`${pr.base?.ref || 'unknown'}\\`\\n\\n`;\n\n  if (pr.body && pr.body.length > 0) {\n    const description = pr.body.substring(0, 200);\n    const ellipsis = pr.body.length > 200 ? '...' : '';\n    discordMessage += `**Description**:\\n${description}${ellipsis}\\n\\n`;\n  }\n\n  discordMessage += `[View Pull Request](${pr.html_url || '#'})`;\n  \n} else {\n  // Unknown event type\n  discordMessage = `📫 **GitHub Event: ${eventType}**\\n\\n`;\n  discordMessage += `**Repository**: ${data.repository || 'unknown'}\\n`;\n  discordMessage += `**Sender**: ${data.sender || 'unknown'}\\n`;\n}\n\nreturn [{\n  json: {\n    content: discordMessage,\n    event_data: data\n  }\n}];"
+      },
+      "id": "format-discord-message",
+      "name": "Format Discord Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DISCORD_WEBHOOKURL }}",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "content",
+              "value": "={{ $json.content }}"
+            },
+            {
+              "name": "username",
+              "value": "GitHub Bot"
+            },
+            {
+              "name": "avatar_url",
+              "value": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "send-to-discord",
+      "name": "Send to Discord",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// Format Success Response\nreturn [{\n  json: {\n    status: 'success',\n    message: 'Notification sent to Discord',\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "format-response",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1450, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Validate Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Signature": {
+      "main": [
+        [
+          {
+            "node": "Extract Event Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Event Data": {
+      "main": [
+        [
+          {
+            "node": "Log Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Payload": {
+      "main": [
+        [
+          {
+            "node": "Format Discord Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Discord Message": {
+      "main": [
+        [
+          {
+            "node": "Send to Discord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Discord": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "id": "github-discord-notify",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": null,
+  "meta": {
+    "instanceId": "n8n-labs-lair-nntin-xyz"
+  },
+  "tags": []
+}

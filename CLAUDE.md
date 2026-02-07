@@ -103,7 +103,7 @@ Each markdown SOP in `workflows/` should have a corresponding implementation in 
 |----------|---------------|--------|
 | `workflows/template.md` | **Template for new SOPs** | 📝 Template |
 | `workflows/infra/n8n-sync.md` | `tools/scripts/sync-workflows.sh` | ✅ Implemented |
-| `workflows/n8n-webhook/notify-discord.md` | `tools/n8n-flows/{workflow-id}.json` | ⏳ To be created |
+| `workflows/n8n-webhook/notify-discord.md` | `tools/n8n-flows/github-discord-notify.json` | 🔨 Deployed (needs activation & testing) |
 
 **When creating new workflows:**
 1. **Copy the template**: Start with `workflows/template.md` as your base
@@ -163,10 +163,85 @@ Each markdown SOP in `workflows/` should have a corresponding implementation in 
 - Manual one-time setup in n8n UI required
 - After binding credentials, export to capture changes
 
+**Environment Variables:**
+- Access in workflows via `{{ $env.VARIABLE_NAME }}`
+- Must be set in n8n environment (docker-compose, .env, etc.)
+- Common pattern: Store secrets in .env, reference in n8n
+- **Important**: Variable names are case-sensitive
+- Example: `{{ $env.N8N_WEBHOOK_SECRET }}`
+
+**Webhook Data Structure:**
+- Webhook node wraps data under `$json.body` (not `$json` directly)
+- Headers accessible via `$json.headers`
+- Query params via `$json.query`
+- URL params via `$json.params`
+- **Critical**: Always access webhook payload via `$json.body.fieldName`
+
+**Code Nodes:**
+- Use `$input.all()` for all items (recommended for most cases)
+- Use `$input.first()` for single item access
+- Must return array format: `[{json: {...}}]`
+- Can use Node.js built-ins: `crypto`, `fs`, `path`
+- Use `console.log()` for debugging (visible in n8n execution logs)
+- Set `continueOnFail: true` for non-critical nodes
+
+**File Operations in Code Nodes:**
+- Paths are relative to n8n container working directory
+- Use `fs.mkdirSync(path, {recursive: true})` to create directories
+- Wrap in try-catch for error handling
+- Consider using Write Binary node for simpler file operations
+
 **Testing:**
+- Workflows imported as `active: false` by default
+- Must activate in n8n UI before webhook endpoints become available
 - Use n8n MCP server to execute workflows programmatically
 - Or test manually in n8n UI
 - Always test after import before activating
+- Webhook endpoints: `https://n8n-host/webhook/path-name`
+
+### n8n Workflow Implementation Best Practices
+
+When implementing n8n workflows from SOPs:
+
+**1. Node Configuration:**
+- Use descriptive node names that match SOP sections
+- Set `typeVersion` to latest for each node type (check n8n docs)
+- Use `runOnceForAllItems` mode for Code nodes (default, most efficient)
+- Position nodes left-to-right in execution order (x: 250, 450, 650, ...)
+
+**2. Environment Variables:**
+- Always use `{{ $env.VAR_NAME }}` syntax, never hardcode secrets
+- Verify .env variable names match workflow references exactly
+- Document required env vars in SOP Prerequisites section
+
+**3. Error Handling:**
+- Use `continueOnFail: true` for non-critical nodes (logging, notifications)
+- Add try-catch in Code nodes for external API calls or file operations
+- Return meaningful error messages in response nodes
+
+**4. Webhook Workflows:**
+- Set `responseMode: "onReceived"` for async processing (fire-and-forget)
+- Set `responseMode: "lastNode"` for synchronous responses
+- Always validate webhook data early (signature, required fields)
+- Remember: webhook data is under `$json.body`, not `$json`
+
+**5. Code Node Patterns:**
+- Access headers: `$input.first().json.headers['header-name']`
+- Access body: `$input.first().json.body.fieldName`
+- Reference other nodes: `$node["Node Name"].json`
+- Always return `[{json: {...}}]` format
+
+**6. Testing Strategy:**
+- Import workflow → Activate in UI → Test webhook endpoint
+- Test localhost first (bypass auth) then production (with auth)
+- Verify all paths (success, validation failure, error cases)
+- Check n8n execution logs for errors
+
+**7. File Operations:**
+- Paths in Code nodes are relative to n8n container
+- Create directories with `{recursive: true}` option
+- Use try-catch and log errors
+- Consider absolute paths or env vars for portability
 
 ---
 

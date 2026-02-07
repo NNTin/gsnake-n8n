@@ -1,11 +1,12 @@
 ---
-implementation_status: not_started
+implementation_status: deployed
 tool_type: n8n-webhook
 tool_location: tools/n8n-flows/github-discord-notify.json
 workflow_id: github-discord-notify
-last_updated: 2026-02-07
+last_updated: 2026-02-07T23:30:00Z
 dependencies: []
 tags: ["github", "discord", "webhook", "notification", "hmac", "security"]
+notes: "Workflow created and deployed. Requires activation in n8n UI and testing with real GitHub webhooks."
 ---
 
 # GitHub to Discord Notification Webhook
@@ -1298,6 +1299,13 @@ git checkout <previous-commit> tools/n8n-flows/github-discord-notify.json
 ---
 
 ## Changelog
+
+**2026-02-07 23:30 UTC**: Workflow implemented and deployed
+- Created n8n workflow JSON with all 7 nodes as specified
+- Implemented HMAC signature validation with localhost bypass
+- Implemented Discord message formatting for push and pull_request events
+- Deployed to n8n instance via sync-workflows.sh import
+- Status: Deployed, awaiting activation and testing
 
 **2026-02-07**: Initial SOP creation following template.md structure
 
