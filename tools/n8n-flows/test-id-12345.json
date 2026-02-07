@@ -1,0 +1,51 @@
+{
+  "updatedAt": "2026-02-07T19:43:11.969Z",
+  "createdAt": "2026-02-07T19:43:11.969Z",
+  "id": "test-id-12345",
+  "name": "Test Import Workflow UPDATED",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "node-1",
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    }
+  ],
+  "connections": {},
+  "settings": {},
+  "staticData": null,
+  "meta": null,
+  "pinData": null,
+  "versionId": "88e8fc39-22f9-4a0c-9701-162b90e7545f",
+  "activeVersionId": null,
+  "versionCounter": 2,
+  "triggerCount": 0,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-02-07T19:43:11.974Z",
+      "createdAt": "2026-02-07T19:43:11.974Z",
+      "role": "workflow:owner",
+      "workflowId": "test-id-12345",
+      "projectId": "dSnNZv7zF1AxLQD6",
+      "project": {
+        "updatedAt": "2026-01-24T12:56:35.595Z",
+        "createdAt": "2026-01-23T22:48:06.540Z",
+        "id": "dSnNZv7zF1AxLQD6",
+        "name": "Tin Nguyen <nguyen.ngoctindaniel@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "83ee6f71-c12c-418b-91c6-9096f2edc160"
+      }
+    }
+  ]
+}
