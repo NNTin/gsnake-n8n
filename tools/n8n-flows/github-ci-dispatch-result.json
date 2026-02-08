@@ -1,4 +1,6 @@
 {
+  "updatedAt": "2026-02-08T17:29:43.125Z",
+  "createdAt": "2026-02-08T16:51:39.103Z",
   "id": "github-ci-dispatch-result",
   "name": "Dispatch GitHub CI And Capture Result",
   "description": "Executes GitHub Actions CI via workflow_dispatch, waits for completion, and returns structured success/failure result",
@@ -591,5 +593,30 @@
     "executionOrder": "v1"
   },
   "staticData": null,
-  "tags": []
+  "meta": null,
+  "pinData": {},
+  "versionId": "bbc5860d-ea40-4d8e-9bf9-94334aee3e8f",
+  "activeVersionId": null,
+  "versionCounter": 9,
+  "triggerCount": 0,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-02-08T16:51:39.108Z",
+      "createdAt": "2026-02-08T16:51:39.108Z",
+      "role": "workflow:owner",
+      "workflowId": "github-ci-dispatch-result",
+      "projectId": "dSnNZv7zF1AxLQD6",
+      "project": {
+        "updatedAt": "2026-01-24T12:56:35.595Z",
+        "createdAt": "2026-01-23T22:48:06.540Z",
+        "id": "dSnNZv7zF1AxLQD6",
+        "name": "Tin Nguyen <nguyen.ngoctindaniel@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "83ee6f71-c12c-418b-91c6-9096f2edc160"
+      }
+    }
+  ]
 }

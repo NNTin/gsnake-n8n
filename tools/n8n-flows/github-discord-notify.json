@@ -4,7 +4,7 @@
   "id": "github-discord-notify",
   "name": "GitHub to Discord Notification",
   "description": null,
-  "active": true,
+  "active": false,
   "isArchived": false,
   "nodes": [
     {
@@ -213,8 +213,8 @@
     "instanceId": "n8n-labs-lair-nntin-xyz"
   },
   "pinData": null,
-  "versionId": "223b1934-706d-42ff-a09a-2326041e8344",
-  "activeVersionId": "223b1934-706d-42ff-a09a-2326041e8344",
+  "versionId": "3e33132a-47b7-44a6-a00b-a7a548c1c784",
+  "activeVersionId": null,
   "versionCounter": 8,
   "triggerCount": 1,
   "tags": [],

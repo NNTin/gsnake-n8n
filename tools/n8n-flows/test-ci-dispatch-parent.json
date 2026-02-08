@@ -1,0 +1,133 @@
+{
+  "updatedAt": "2026-02-08T21:29:35.076Z",
+  "createdAt": "2026-02-08T16:56:32.360Z",
+  "id": "test-ci-dispatch-parent",
+  "name": "Test CI Dispatch Parent",
+  "description": "Test workflow to call github-ci-dispatch-result child workflow",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        256,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare test input for child workflow\nreturn [{\n  json: {\n    repo_owner: 'NNTin',\n    repo_name: 'gsnake-specs',\n    ref: 'main',\n    timeout_seconds: 600,\n    poll_interval_seconds: 10,\n    request_id: 'test-' + new Date().toISOString()\n  }\n}];"
+      },
+      "id": "prepare-test-input",
+      "name": "Prepare Test Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "github-ci-dispatch-result",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/github-ci-dispatch-result",
+          "cachedResultName": "Dispatch GitHub CI And Capture Result"
+        },
+        "options": {}
+      },
+      "id": "execute-child-workflow",
+      "name": "Execute Child Workflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        656,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Display result\nconst items = $input.all();\nconst result = items[0].json;\n\nconsole.log('=== CI Dispatch Result ===');\nconsole.log(JSON.stringify(result, null, 2));\n\nif (result.status === 'completed') {\n  console.log(`CI ${result.ci_success ? 'SUCCEEDED' : 'FAILED'}`);\n  console.log(`Conclusion: ${result.conclusion}`);\n  console.log(`Run URL: ${result.run.html_url}`);\n  console.log(`API calls: ${result.polling.api_calls}`);\n} else if (result.status === 'error') {\n  console.log(`ERROR: ${result.error_code}`);\n  console.log(`Message: ${result.message}`);\n  console.log(`Retryable: ${result.retryable}`);\n}\n\nreturn items;"
+      },
+      "id": "display-result",
+      "name": "Display Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        304
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Prepare Test Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Test Input": {
+      "main": [
+        [
+          {
+            "node": "Execute Child Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Child Workflow": {
+      "main": [
+        [
+          {
+            "node": "Display Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "1e18f1d5-6124-4513-b280-c71db5e27c23",
+  "activeVersionId": null,
+  "versionCounter": 4,
+  "triggerCount": 0,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-02-08T16:56:32.363Z",
+      "createdAt": "2026-02-08T16:56:32.363Z",
+      "role": "workflow:owner",
+      "workflowId": "test-ci-dispatch-parent",
+      "projectId": "dSnNZv7zF1AxLQD6",
+      "project": {
+        "updatedAt": "2026-01-24T12:56:35.595Z",
+        "createdAt": "2026-01-23T22:48:06.540Z",
+        "id": "dSnNZv7zF1AxLQD6",
+        "name": "Tin Nguyen <nguyen.ngoctindaniel@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "83ee6f71-c12c-418b-91c6-9096f2edc160"
+      }
+    }
+  ]
+}
