@@ -107,7 +107,7 @@
         "nodeCredentialType": "githubApi",
         "sendBody": true,
         "contentType": "json",
-        "jsonBody": "={\n  \"ref\": \"{{ $json.ref }}\"\n}",
+        "jsonBody": "{{ { \"ref\": $json.ref } }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
