@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+
+# Pre-commit hook for gsnake-n8n
+# Runs secret scanning against .env values and tracked files
+
+echo "Running pre-commit checks for gsnake-n8n..."
+
+# Prevent committing secrets from .env into tracked files.
+.github/hooks/check-env-secrets.sh
+
+echo "✓ All pre-commit checks passed!"
