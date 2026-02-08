@@ -1,6 +1,6 @@
 ---
 implementation_status: not_started  # Options: not_started | in_progress | implemented
-tool_type: ""                       # Options: shell-script | n8n-node (single node definition) | n8n-webhook (full n8n flow with webhook as starting point)
+tool_type: ""                       # Options: shell-script | n8n-workflow (can be executed by another n8n-flow) | n8n-webhook (n8n-flow with external http webhook trigger)
 tool_location: ""                   # Path in tools/ where implemented (e.g., "tools/n8n-flows/workflow-id.json" or "tools/scripts/my-script.sh")
 workflow_id: ""                     # For n8n workflows: the workflow ID used in JSON
 last_updated: ""                    # ISO 8601 timestamp (YYYY-MM-DD)
