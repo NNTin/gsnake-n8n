@@ -1,12 +1,12 @@
 ---
-implementation_status: blocked
+implementation_status: implemented
 tool_type: n8n-webhook
 tool_location: tools/n8n-flows/github-discord-notify.json
 workflow_id: github-discord-notify
-last_updated: 2026-02-07T21:30:00Z
+last_updated: 2026-02-08T11:10:00Z
 dependencies: []
 tags: ["github", "discord", "webhook", "notification", "hmac", "security"]
-notes: "Implementation tested but not working. Blocked on prerequisite issues. Needs debugging and fixing."
+notes: "✅ Fully implemented and tested. HMAC signature validation working with raw body. Environment variable access enabled via N8N_BLOCK_ENV_ACCESS_IN_NODE=false."
 ---
 
 # GitHub to Discord Notification Webhook
@@ -344,43 +344,71 @@ PR description (first 200 chars)...
 
 #### 2. Code Node: Validate Signature (n8n-nodes-base.code)
 - **Purpose**: Validate GitHub `X-Hub-Signature-256` HMAC
+- **CRITICAL**: Must use raw request body, not re-stringified JSON
 - **Logic**:
   ```javascript
   const crypto = require('crypto');
 
+  const items = $input.all();
+  const firstItem = items[0];
+
+  // Get headers from webhook
+  const headers = firstItem.json.headers || {};
+
   // Allow localhost/manual triggers (bypass signature check)
-  const origin = $headers['host'] || '';
-  const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
+  const host = headers['host'] || '';
+  const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
 
   if (isLocalhost) {
     console.log('Localhost request - skipping signature validation');
-    return $input.all();
+    return items;
   }
 
   // Validate GitHub signature
   const secret = $env.N8N_WEBHOOK_SECRET;
-  const signature = $headers['x-hub-signature-256'];
-  const rawBody = $json; // Full payload
+  const signature = headers['x-hub-signature-256'];
 
   if (!signature) {
     throw new Error('Missing X-Hub-Signature-256 header');
   }
 
+  if (!secret) {
+    throw new Error('N8N_WEBHOOK_SECRET environment variable not set');
+  }
+
+  // CRITICAL: Get raw body from binary data (webhook node stores it here when rawBody: true)
+  const rawBodyBuffer = firstItem.binary?.data?.data;
+  if (!rawBodyBuffer) {
+    throw new Error('Raw body not available - ensure webhook node has rawBody: true');
+  }
+
+  // Convert base64 to string
+  const rawBody = Buffer.from(rawBodyBuffer, 'base64').toString('utf8');
+
+  // Calculate HMAC signature on raw body (same as GitHub does)
+  // DO NOT use JSON.stringify(body) - it won't match the original request
   const hmac = crypto
     .createHmac('sha256', secret)
-    .update(JSON.stringify(rawBody))
+    .update(rawBody)
     .digest('hex');
 
-  const expected = `sha256=${hmac}`;
+  const expectedSignature = `sha256=${hmac}`;
 
-  if (signature !== expected) {
+  // Verify signature matches
+  if (signature !== expectedSignature) {
+    console.log('Signature mismatch:');
+    console.log('  Expected:', expectedSignature);
+    console.log('  Received:', signature);
     throw new Error('Invalid GitHub signature');
   }
 
-  console.log('Signature validated successfully');
-  return $input.all();
+  console.log('✓ Signature validated successfully');
+  return items;
   ```
 - **On Error**: Workflow fails, returns error to GitHub
+- **Environment Requirements**:
+  - `NODE_FUNCTION_ALLOW_BUILTIN=crypto` (allow crypto module)
+  - `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` (allow $env access)
 
 #### 3. Code Node: Extract Event Data (n8n-nodes-base.code)
 - **Purpose**: Parse GitHub payload and prepare data for logging and Discord
@@ -1299,6 +1327,21 @@ git checkout <previous-commit> tools/n8n-flows/github-discord-notify.json
 ---
 
 ## Changelog
+
+**2026-02-08 11:10 UTC**: ✅ WORKFLOW FULLY WORKING - All issues resolved
+- **CRITICAL FIX**: Updated HMAC signature validation to use raw request body from `firstItem.binary.data.data` (base64-decoded)
+- **ISSUE RESOLVED**: n8n v2.0+ blocks environment variable access in Code nodes by default
+- **SOLUTION**: Added `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` to n8n environment configuration
+- **TESTING**: Execution #17 completed successfully with status "success"
+- **VERIFICATION**: Full end-to-end flow tested (webhook → signature validation → Discord notification)
+- **STATUS**: Production-ready and fully functional
+
+**Key Technical Details:**
+- GitHub calculates HMAC on raw request bytes, not re-stringified JSON
+- Must access `firstItem.binary.data.data` (base64) when webhook has `rawBody: true`
+- Cannot use `JSON.stringify(body)` as it produces different whitespace/ordering than original
+- Environment variables accessible in Code nodes require `N8N_BLOCK_ENV_ACCESS_IN_NODE=false`
+- Built-in modules require `NODE_FUNCTION_ALLOW_BUILTIN=crypto`
 
 **2026-02-07 21:10 UTC**: Workflow fully implemented and tested ✅
 - Activated workflow using agent-browser automation

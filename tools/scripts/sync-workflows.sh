@@ -15,7 +15,7 @@
 set -e  # Exit on error
 
 # Configuration
-CONTAINER_ID="440742681e58b8049db5f7541c5ce24312bd348662e6a68bab55720f7d16d30e"
+CONTAINER_ID="n8n"  # Use container name instead of ID (survives restarts)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLOWS_DIR="$SCRIPT_DIR/../n8n-flows"
 CONTAINER_TMP="/tmp/n8n-sync-$$"  # Unique temp dir per script invocation

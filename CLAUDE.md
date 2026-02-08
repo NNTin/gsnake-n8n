@@ -104,7 +104,7 @@ Each markdown SOP in `workflows/` should have a corresponding implementation in 
 | `workflows/template.md` | **Template for new SOPs** | 📝 Template |
 | `workflows/infra/n8n-sync.md` | `tools/scripts/sync-workflows.sh` | ✅ Implemented |
 | `workflows/infra/trigger-github-push-event.md` | `tools/scripts/trigger-github-push-event.sh` | ✅ Implemented |
-| `workflows/n8n-webhook/notify-discord.md` | `tools/n8n-flows/github-discord-notify.json` | ⏸️ Blocked (prerequisite issues) |
+| `workflows/n8n-webhook/notify-discord.md` | `tools/n8n-flows/github-discord-notify.json` | ✅ Implemented (HMAC validation working) |
 
 **When creating new workflows:**
 1. **Copy the template**: Start with `workflows/template.md` as your base
