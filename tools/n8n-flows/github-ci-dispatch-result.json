@@ -34,7 +34,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "https://api.github.com/repos/{{ $json.repo_owner }}/{{ $json.repo_name }}/actions/workflows/ci.yml/runs",
+        "url": "={{ 'https://api.github.com/repos/' + $json.repo_owner + '/' + $json.repo_name + '/actions/workflows/ci.yml/runs' }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "githubApi",
         "sendQuery": true,
@@ -88,7 +88,7 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "// Extract baseline run IDs\nconst items = $input.all();\nconst stateItem = items[0];\nconst state = stateItem.json;\n\n// Get baseline runs from HTTP response\nconst baselineResponse = $node['List Baseline Runs'].json;\nconst baseline_runs = baselineResponse.workflow_runs || [];\nconst baseline_run_ids = baseline_runs.map(run => run.id);\n\nstate.baseline_run_ids = baseline_run_ids;\nstate.api_calls += 1;\n\nconsole.log(`Captured ${baseline_run_ids.length} baseline runs:`, baseline_run_ids);\n\nreturn [{ json: state }];"
+        "jsCode": "// Extract baseline run IDs and restore normalized state\nconst state = { ...$node['Validate + Normalize Input'].json };\nconst baselineResponse = $node['List Baseline Runs'].json;\nconst baseline_runs = baselineResponse.workflow_runs || [];\nconst baseline_run_ids = baseline_runs.map((run) => run.id);\n\nstate.baseline_run_ids = baseline_run_ids;\nstate.api_calls += 1;\n\nconsole.log(`Captured ${baseline_run_ids.length} baseline runs:`, baseline_run_ids);\n\nreturn [{ json: state }];"
       },
       "id": "extract-baseline-ids",
       "name": "Extract Baseline IDs",
@@ -102,12 +102,19 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.github.com/repos/{{ $json.repo_owner }}/{{ $json.repo_name }}/actions/workflows/ci.yml/dispatches",
+        "url": "={{ 'https://api.github.com/repos/' + $json.repo_owner + '/' + $json.repo_name + '/actions/workflows/ci.yml/dispatches' }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "githubApi",
         "sendBody": true,
         "contentType": "json",
-        "jsonBody": "={{ { \"ref\": $json.ref } }}",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "ref",
+              "value": "={{ $json.ref }}"
+            }
+          ]
+        },
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -142,7 +149,7 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "// Check dispatch response\nconst items = $input.all();\nconst stateItem = items[0];\nconst state = stateItem.json;\n\n// Get dispatch HTTP response\nconst dispatchResponse = $node['Dispatch CI'].json;\n\n// Check if dispatch was successful (should be 204 No Content)\n// n8n may return empty response for 204, which is normal\nstate.api_calls += 1;\nstate.dispatch_completed_at = new Date().toISOString();\n\nconsole.log('Dispatch completed successfully at', state.dispatch_completed_at);\nconsole.log('Starting discovery polling...');\n\nreturn [{ json: state }];"
+        "jsCode": "// Dispatch HTTP node outputs response payload, so restore state from previous stateful node\nconst state = { ...$node['Extract Baseline IDs'].json };\n\nstate.api_calls += 1;\nstate.dispatch_completed_at = new Date().toISOString();\n\nconsole.log('Dispatch completed successfully at', state.dispatch_completed_at);\nconsole.log('Starting discovery polling...');\n\nreturn [{ json: state }];"
       },
       "id": "check-dispatch-status",
       "name": "Check Dispatch Status",
@@ -171,7 +178,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "https://api.github.com/repos/{{ $json.repo_owner }}/{{ $json.repo_name }}/actions/workflows/ci.yml/runs",
+        "url": "={{ 'https://api.github.com/repos/' + $json.repo_owner + '/' + $json.repo_name + '/actions/workflows/ci.yml/runs' }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "githubApi",
         "sendQuery": true,
@@ -225,7 +232,7 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "// Check for new run matching criteria\nconst items = $input.all();\nconst stateItem = items[0];\nconst state = stateItem.json;\n\nstate.api_calls += 1;\n\nconst pollResponse = $node['Poll Discover Run'].json;\nconst current_runs = pollResponse.workflow_runs || [];\n\n// Calculate time elapsed since dispatch\nconst now = new Date();\nconst dispatch_time = new Date(state.dispatch_requested_at);\nconst elapsed_seconds = (now - dispatch_time) / 1000;\n\nconsole.log(`Discovery poll ${state.api_calls}: elapsed ${elapsed_seconds.toFixed(1)}s, checking ${current_runs.length} runs`);\n\n// Filter candidates: new runs not in baseline\nconst dispatch_threshold = new Date(dispatch_time - 5000); // 5 second clock skew tolerance\nconst candidates = current_runs.filter(run => {\n  const is_new = !state.baseline_run_ids.includes(run.id);\n  const is_workflow_dispatch = run.event === 'workflow_dispatch';\n  const is_ci_yml = run.path === '.github/workflows/ci.yml';\n  const created_at = new Date(run.created_at);\n  const is_after_dispatch = created_at >= dispatch_threshold;\n  \n  return is_new && is_workflow_dispatch && is_ci_yml && is_after_dispatch;\n});\n\nconsole.log(`Found ${candidates.length} candidate(s)`);\n\nif (candidates.length === 0) {\n  // Check timeout\n  if (elapsed_seconds > state.timeout_seconds) {\n    console.log('Discovery timeout exceeded');\n    return [{\n      json: {\n        status: 'error',\n        error_code: 'RUN_NOT_FOUND',\n        message: 'Dispatch accepted but no matching workflow_dispatch run was discovered before timeout.',\n        retryable: true,\n        context: {\n          owner: state.repo_owner,\n          repo: state.repo_name,\n          ref: state.ref,\n          timeout_seconds: state.timeout_seconds,\n          elapsed_seconds: Math.floor(elapsed_seconds)\n        },\n        request_id: state.request_id\n      }\n    }];\n  }\n  \n  // Continue polling\n  state.continue_discovery = true;\n  return [{ json: state }];\n  \n} else if (candidates.length === 1) {\n  // Found unique match\n  const matched_run = candidates[0];\n  state.matched_run_id = matched_run.id;\n  state.matched_run = matched_run;\n  state.continue_discovery = false;\n  \n  console.log(`\u2713 Matched run ID: ${matched_run.id}`);\n  console.log(`  URL: ${matched_run.html_url}`);\n  console.log(`  Status: ${matched_run.status}`);\n  \n  return [{ json: state }];\n  \n} else {\n  // Multiple candidates - ambiguous\n  console.log('Multiple candidates found - ambiguous match');\n  const candidate_ids = candidates.map(c => c.id);\n  \n  return [{\n    json: {\n      status: 'error',\n      error_code: 'RUN_AMBIGUOUS',\n      message: `Found ${candidates.length} matching runs, cannot uniquely identify dispatched run.`,\n      retryable: false,\n      context: {\n        owner: state.repo_owner,\n        repo: state.repo_name,\n        ref: state.ref,\n        candidate_run_ids: candidate_ids\n      },\n      request_id: state.request_id\n    }\n  }];\n}"
+        "jsCode": "// Check for new run matching criteria\nlet state;\n\n// After first iteration, state comes from Wait Poll Interval (Discovery)\ntry {\n  const loopState = $node['Wait Poll Interval (Discovery)'].json;\n  if (loopState && loopState.dispatch_requested_at) {\n    state = { ...loopState };\n  }\n} catch (error) {\n  // Wait node has not executed yet on first pass\n}\n\n// First iteration fallback\nif (!state) {\n  state = { ...$node['Check Dispatch Status'].json };\n}\n\nstate.api_calls += 1;\n\nconst pollResponse = $node['Poll Discover Run'].json;\nconst current_runs = pollResponse.workflow_runs || [];\n\n// Calculate time elapsed since dispatch\nconst now = new Date();\nconst dispatch_time = new Date(state.dispatch_requested_at);\nconst elapsed_seconds = (now - dispatch_time) / 1000;\n\nconsole.log(`Discovery poll ${state.api_calls}: elapsed ${elapsed_seconds.toFixed(1)}s, checking ${current_runs.length} runs`);\n\n// Filter candidates: new runs not in baseline\nconst dispatch_threshold = new Date(dispatch_time - 5000); // 5 second clock skew tolerance\nconst candidates = current_runs.filter((run) => {\n  const is_new = !state.baseline_run_ids.includes(run.id);\n  const is_workflow_dispatch = run.event === 'workflow_dispatch';\n  const is_ci_yml = run.path === '.github/workflows/ci.yml';\n  const created_at = new Date(run.created_at);\n  const is_after_dispatch = created_at >= dispatch_threshold;\n\n  return is_new && is_workflow_dispatch && is_ci_yml && is_after_dispatch;\n});\n\nconsole.log(`Found ${candidates.length} candidate(s)`);\n\nif (candidates.length === 0) {\n  // Check timeout\n  if (elapsed_seconds > state.timeout_seconds) {\n    console.log('Discovery timeout exceeded');\n    return [{\n      json: {\n        status: 'error',\n        error_code: 'RUN_NOT_FOUND',\n        message: 'Dispatch accepted but no matching workflow_dispatch run was discovered before timeout.',\n        retryable: true,\n        context: {\n          owner: state.repo_owner,\n          repo: state.repo_name,\n          ref: state.ref,\n          timeout_seconds: state.timeout_seconds,\n          elapsed_seconds: Math.floor(elapsed_seconds),\n        },\n        request_id: state.request_id,\n      },\n    }];\n  }\n\n  // Continue polling\n  state.continue_discovery = true;\n  return [{ json: state }];\n}\n\nif (candidates.length === 1) {\n  // Found unique match\n  const matched_run = candidates[0];\n  state.matched_run_id = matched_run.id;\n  state.matched_run = matched_run;\n  state.continue_discovery = false;\n\n  console.log(`✓ Matched run ID: ${matched_run.id}`);\n  console.log(`  URL: ${matched_run.html_url}`);\n  console.log(`  Status: ${matched_run.status}`);\n\n  return [{ json: state }];\n}\n\n// Multiple candidates - ambiguous\nconsole.log('Multiple candidates found - ambiguous match');\nconst candidate_ids = candidates.map((c) => c.id);\n\nreturn [{\n  json: {\n    status: 'error',\n    error_code: 'RUN_AMBIGUOUS',\n    message: `Found ${candidates.length} matching runs, cannot uniquely identify dispatched run.`,\n    retryable: false,\n    context: {\n      owner: state.repo_owner,\n      repo: state.repo_name,\n      ref: state.ref,\n      candidate_run_ids: candidate_ids,\n    },\n    request_id: state.request_id,\n  },\n}];"
       },
       "id": "check-discovery-result",
       "name": "Check Discovery Result",
@@ -287,7 +294,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "https://api.github.com/repos/{{ $json.repo_owner }}/{{ $json.repo_name }}/actions/runs/{{ $json.matched_run_id }}",
+        "url": "={{ 'https://api.github.com/repos/' + $json.repo_owner + '/' + $json.repo_name + '/actions/runs/' + $json.matched_run_id }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "githubApi",
         "sendHeaders": true,
@@ -324,7 +331,7 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "// Check run completion status\nconst items = $input.all();\nconst stateItem = items[0];\nconst state = stateItem.json;\n\nstate.api_calls += 1;\n\nconst runDetail = $node['Poll Run Completion'].json;\n\nconsole.log(`Completion poll: run ${runDetail.id}, status=${runDetail.status}, conclusion=${runDetail.conclusion || 'null'}`);\n\n// Check if run is completed\nif (runDetail.status === 'completed') {\n  console.log('\u2713 Run completed');\n  state.final_run = runDetail;\n  state.continue_completion = false;\n  return [{ json: state }];\n}\n\n// Check timeout\nconst now = new Date();\nconst dispatch_time = new Date(state.dispatch_requested_at);\nconst elapsed_seconds = (now - dispatch_time) / 1000;\n\nif (elapsed_seconds > state.timeout_seconds) {\n  console.log('Completion timeout exceeded');\n  return [{\n    json: {\n      status: 'error',\n      error_code: 'POLL_TIMEOUT',\n      message: 'Run discovered but did not complete before timeout.',\n      retryable: true,\n      context: {\n        owner: state.repo_owner,\n        repo: state.repo_name,\n        ref: state.ref,\n        run_id: state.matched_run_id,\n        run_url: runDetail.html_url,\n        timeout_seconds: state.timeout_seconds,\n        elapsed_seconds: Math.floor(elapsed_seconds)\n      },\n      request_id: state.request_id\n    }\n  }];\n}\n\n// Continue polling\nstate.continue_completion = true;\nreturn [{ json: state }];"
+        "jsCode": "// Check run completion status\nlet state;\n\n// After first completion poll, state comes from Wait Poll Interval (Completion)\ntry {\n  const loopState = $node['Wait Poll Interval (Completion)'].json;\n  if (loopState && loopState.matched_run_id) {\n    state = { ...loopState };\n  }\n} catch (error) {\n  // Wait node has not executed yet on first pass\n}\n\n// First completion poll fallback\nif (!state) {\n  state = { ...$node['Check Discovery Result'].json };\n}\n\nstate.api_calls += 1;\n\nconst runDetail = $node['Poll Run Completion'].json;\n\nconsole.log(`Completion poll: run ${runDetail.id}, status=${runDetail.status}, conclusion=${runDetail.conclusion || 'null'}`);\n\n// Check if run is completed\nif (runDetail.status === 'completed') {\n  console.log('✓ Run completed');\n  state.final_run = runDetail;\n  state.continue_completion = false;\n  return [{ json: state }];\n}\n\n// Check timeout\nconst now = new Date();\nconst dispatch_time = new Date(state.dispatch_requested_at);\nconst elapsed_seconds = (now - dispatch_time) / 1000;\n\nif (elapsed_seconds > state.timeout_seconds) {\n  console.log('Completion timeout exceeded');\n  return [{\n    json: {\n      status: 'error',\n      error_code: 'POLL_TIMEOUT',\n      message: 'Run discovered but did not complete before timeout.',\n      retryable: true,\n      context: {\n        owner: state.repo_owner,\n        repo: state.repo_name,\n        ref: state.ref,\n        run_id: state.matched_run_id,\n        run_url: runDetail.html_url,\n        timeout_seconds: state.timeout_seconds,\n        elapsed_seconds: Math.floor(elapsed_seconds),\n      },\n      request_id: state.request_id,\n    },\n  }];\n}\n\n// Continue polling\nstate.continue_completion = true;\nreturn [{ json: state }];"
       },
       "id": "check-completion-status",
       "name": "Check Completion Status",
