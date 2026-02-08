@@ -34,7 +34,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "=https://api.github.com/repos/{{ $json.repo_owner }}/{{ $json.repo_name }}/actions/workflows/ci.yml/runs",
+        "url": "https://api.github.com/repos/{{ $json.repo_owner }}/{{ $json.repo_name }}/actions/workflows/ci.yml/runs",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "githubApi",
         "sendQuery": true,
@@ -102,12 +102,12 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://api.github.com/repos/{{ $json.repo_owner }}/{{ $json.repo_name }}/actions/workflows/ci.yml/dispatches",
+        "url": "https://api.github.com/repos/{{ $json.repo_owner }}/{{ $json.repo_name }}/actions/workflows/ci.yml/dispatches",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "githubApi",
         "sendBody": true,
         "contentType": "json",
-        "jsonBody": "{{ { \"ref\": $json.ref } }}",
+        "jsonBody": "={{ { \"ref\": $json.ref } }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -171,7 +171,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "=https://api.github.com/repos/{{ $json.repo_owner }}/{{ $json.repo_name }}/actions/workflows/ci.yml/runs",
+        "url": "https://api.github.com/repos/{{ $json.repo_owner }}/{{ $json.repo_name }}/actions/workflows/ci.yml/runs",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "githubApi",
         "sendQuery": true,
@@ -287,7 +287,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "=https://api.github.com/repos/{{ $json.repo_owner }}/{{ $json.repo_name }}/actions/runs/{{ $json.matched_run_id }}",
+        "url": "https://api.github.com/repos/{{ $json.repo_owner }}/{{ $json.repo_name }}/actions/runs/{{ $json.matched_run_id }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "githubApi",
         "sendHeaders": true,
