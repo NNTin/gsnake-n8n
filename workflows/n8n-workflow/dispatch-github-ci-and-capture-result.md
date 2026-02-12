@@ -3,7 +3,7 @@ implementation_status: implemented
 tool_type: n8n-workflow
 tool_location: tools/n8n-flows/github-ci-dispatch-result.json
 workflow_id: github-ci-dispatch-result
-last_updated: "2026-02-08T17:00:00Z"
+last_updated: "2026-02-12T00:00:00Z"
 dependencies:
   - workflows/infra/n8n-sync.md
   - .github/workflows/ci.yml
@@ -87,6 +87,7 @@ Parent workflow calls this child workflow via n8n `Execute Workflow` node and wa
 {
   "repo_owner": "NNTin",
   "repo_name": "gSnake",
+  "workflow_path": ".github/workflows/ci.yml",
   "ref": "main",
   "timeout_seconds": 1800,
   "poll_interval_seconds": 15,
@@ -97,6 +98,7 @@ Parent workflow calls this child workflow via n8n `Execute Workflow` node and wa
 **Parameters:**
 - `repo_owner` (optional, default `NNTin`): GitHub repository owner.
 - `repo_name` (optional, default `gSnake`): GitHub repository name.
+- `workflow_path` (optional, default `.github/workflows/ci.yml`): Path to workflow file to dispatch.
 - `ref` (optional, default `main`): Branch or tag for `workflow_dispatch`.
 - `timeout_seconds` (optional, default `1800`, min `60`, max `7200`): End-to-end timeout.
 - `poll_interval_seconds` (optional, default `15`, min `5`, max `60`): Poll cadence.
@@ -192,6 +194,7 @@ Parent workflow calls this child workflow via n8n `Execute Workflow` node and wa
 {
   "repo_owner": "string (optional, default: NNTin)",
   "repo_name": "string (optional, default: gSnake)",
+  "workflow_path": "string (optional, default: .github/workflows/ci.yml)",
   "ref": "string (optional, default: main)",
   "timeout_seconds": "number (optional, default: 1800, range: 60..7200)",
   "poll_interval_seconds": "number (optional, default: 15, range: 5..60)",
@@ -203,7 +206,7 @@ Parent workflow calls this child workflow via n8n `Execute Workflow` node and wa
 - Exactly one input item must be processed; multiple items are rejected with `INVALID_INPUT`.
 - `ref` must be non-empty.
 - `timeout_seconds` and `poll_interval_seconds` must be integers within allowed ranges.
-- Workflow path is fixed to `.github/workflows/ci.yml` (not caller-configurable in V1).
+- `workflow_path` defaults to `.github/workflows/ci.yml` but can be overridden (e.g., `.github/workflows/test.yml`).
 
 ### Output Format
 
@@ -725,7 +728,7 @@ git checkout HEAD~1 -- tools/n8n-flows/github-ci-dispatch-result.json
 
 Known limitations and planned enhancements:
 
-- [ ] Add optional support for configurable workflow file (not just `ci.yml`) with strict allowlist.
+- [x] Add optional support for configurable workflow file (not just `ci.yml`) - **Completed 2026-02-12**
 - [ ] Add caller-provided correlation strategy once `.github/workflows/ci.yml` defines workflow inputs.
 - [ ] Add optional callback notification node for async fan-out (Discord/Slack).
 - [ ] Add metrics export for CI duration and failure-rate trends.
@@ -761,6 +764,8 @@ Known limitations and planned enhancements:
 ## Changelog
 
 Track major changes to this SOP:
+
+**2026-02-12**: Added optional `workflow_path` parameter to support dispatching different workflow files (e.g., `test.yml` in addition to `ci.yml`)
 
 **2026-02-08**: Initial creation
 

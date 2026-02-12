@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-02-08T17:29:43.125Z",
+  "updatedAt": "2026-02-12T13:32:43.242Z",
   "createdAt": "2026-02-08T16:51:39.103Z",
   "id": "github-ci-dispatch-result",
   "name": "Dispatch GitHub CI And Capture Result",
@@ -14,29 +14,26 @@
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1,
       "position": [
-        250,
-        300
+        624,
+        -32
       ]
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "language": "javaScript",
-        "jsCode": "// Validate and Normalize Input\nconst items = $input.all();\n\n// Validation: exactly one input item required\nif (items.length !== 1) {\n  return [{\n    json: {\n      status: 'error',\n      error_code: 'INVALID_INPUT',\n      message: `Expected exactly 1 input item, received ${items.length}`,\n      retryable: false,\n      context: {},\n      request_id: null\n    }\n  }];\n}\n\nconst input = items[0].json;\n\n// Apply defaults and validate\nconst repo_owner = input.repo_owner || 'NNTin';\nconst repo_name = input.repo_name || 'gSnake';\nconst ref = input.ref || 'main';\nconst timeout_seconds = input.timeout_seconds || 1800;\nconst poll_interval_seconds = input.poll_interval_seconds || 15;\nconst request_id = input.request_id || null;\n\n// Validation\nif (!ref || ref.trim() === '') {\n  return [{\n    json: {\n      status: 'error',\n      error_code: 'INVALID_INPUT',\n      message: 'ref must be non-empty',\n      retryable: false,\n      context: { repo_owner, repo_name },\n      request_id\n    }\n  }];\n}\n\nif (timeout_seconds < 60 || timeout_seconds > 7200) {\n  return [{\n    json: {\n      status: 'error',\n      error_code: 'INVALID_INPUT',\n      message: 'timeout_seconds must be between 60 and 7200',\n      retryable: false,\n      context: { repo_owner, repo_name, ref },\n      request_id\n    }\n  }];\n}\n\nif (poll_interval_seconds < 5 || poll_interval_seconds > 60) {\n  return [{\n    json: {\n      status: 'error',\n      error_code: 'INVALID_INPUT',\n      message: 'poll_interval_seconds must be between 5 and 60',\n      retryable: false,\n      context: { repo_owner, repo_name, ref },\n      request_id\n    }\n  }];\n}\n\n// Initialize state\nconst state = {\n  repo_owner,\n  repo_name,\n  ref,\n  workflow_path: '.github/workflows/ci.yml',\n  timeout_seconds,\n  poll_interval_seconds,\n  request_id,\n  dispatch_requested_at: new Date().toISOString(),\n  api_calls: 0,\n  baseline_run_ids: [],\n  matched_run_id: null\n};\n\nconsole.log('Initialized state:', JSON.stringify(state, null, 2));\n\nreturn [{ json: state }];"
+        "jsCode": "// Validate and Normalize Input\nconst items = $input.all();\n\n// Validation: exactly one input item required\nif (items.length !== 1) {\n  return [{\n    json: {\n      status: 'error',\n      error_code: 'INVALID_INPUT',\n      message: `Expected exactly 1 input item, received ${items.length}`,\n      retryable: false,\n      context: {},\n      request_id: null\n    }\n  }];\n}\n\nconst input = items[0].json;\n\n// Apply defaults and validate\nconst repo_owner = input.repo_owner || 'NNTin';\nconst repo_name = input.repo_name || 'gSnake';\nconst ref = input.ref || 'main';\nconst workflow_path = input.workflow_path || '.github/workflows/ci.yml';\nconst timeout_seconds = input.timeout_seconds || 1800;\nconst poll_interval_seconds = input.poll_interval_seconds || 15;\nconst request_id = input.request_id || null;\n\n// Validation\nif (!ref || ref.trim() === '') {\n  return [{\n    json: {\n      status: 'error',\n      error_code: 'INVALID_INPUT',\n      message: 'ref must be non-empty',\n      retryable: false,\n      context: { repo_owner, repo_name },\n      request_id\n    }\n  }];\n}\n\nif (timeout_seconds < 60 || timeout_seconds > 7200) {\n  return [{\n    json: {\n      status: 'error',\n      error_code: 'INVALID_INPUT',\n      message: 'timeout_seconds must be between 60 and 7200',\n      retryable: false,\n      context: { repo_owner, repo_name, ref },\n      request_id\n    }\n  }];\n}\n\nif (poll_interval_seconds < 5 || poll_interval_seconds > 60) {\n  return [{\n    json: {\n      status: 'error',\n      error_code: 'INVALID_INPUT',\n      message: 'poll_interval_seconds must be between 5 and 60',\n      retryable: false,\n      context: { repo_owner, repo_name, ref },\n      request_id\n    }\n  }];\n}\n\n// Initialize state\nconst state = {\n  repo_owner,\n  repo_name,\n  ref,\n  workflow_path,\n  timeout_seconds,\n  poll_interval_seconds,\n  request_id,\n  dispatch_requested_at: new Date().toISOString(),\n  api_calls: 0,\n  baseline_run_ids: [],\n  matched_run_id: null\n};\n\nconsole.log('Initialized state:', JSON.stringify(state, null, 2));\n\nreturn [{ json: state }];"
       },
       "id": "validate-normalize-input",
       "name": "Validate + Normalize Input",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        450,
-        300
+        832,
+        -32
       ]
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "={{ 'https://api.github.com/repos/' + $json.repo_owner + '/' + $json.repo_name + '/actions/workflows/ci.yml/runs' }}",
+        "url": "={{ 'https://api.github.com/repos/' + $json.repo_owner + '/' + $json.repo_name + '/actions/workflows/' + $json.workflow_path.split('/').pop() + '/runs' }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "githubApi",
         "sendQuery": true,
@@ -76,8 +73,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        650,
-        300
+        1024,
+        -32
       ],
       "credentials": {
         "githubApi": {
@@ -88,8 +85,6 @@
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "language": "javaScript",
         "jsCode": "// Extract baseline run IDs and restore normalized state\nconst state = { ...$node['Validate + Normalize Input'].json };\nconst baselineResponse = $node['List Baseline Runs'].json;\nconst baseline_runs = baselineResponse.workflow_runs || [];\nconst baseline_run_ids = baseline_runs.map((run) => run.id);\n\nstate.baseline_run_ids = baseline_run_ids;\nstate.api_calls += 1;\n\nconsole.log(`Captured ${baseline_run_ids.length} baseline runs:`, baseline_run_ids);\n\nreturn [{ json: state }];"
       },
       "id": "extract-baseline-ids",
@@ -97,26 +92,16 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        850,
-        300
+        1232,
+        -32
       ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ 'https://api.github.com/repos/' + $json.repo_owner + '/' + $json.repo_name + '/actions/workflows/ci.yml/dispatches' }}",
+        "url": "={{ 'https://api.github.com/repos/' + $json.repo_owner + '/' + $json.repo_name + '/actions/workflows/' + $json.workflow_path.split('/').pop() + '/dispatches' }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "githubApi",
-        "sendBody": true,
-        "contentType": "json",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "ref",
-              "value": "={{ $json.ref }}"
-            }
-          ]
-        },
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -130,6 +115,15 @@
             }
           ]
         },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "ref",
+              "value": "={{ $json.ref }}"
+            }
+          ]
+        },
         "options": {}
       },
       "id": "dispatch-ci",
@@ -137,8 +131,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1050,
-        300
+        1424,
+        -32
       ],
       "credentials": {
         "githubApi": {
@@ -149,8 +143,6 @@
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "language": "javaScript",
         "jsCode": "// Dispatch HTTP node outputs response payload, so restore state from previous stateful node\nconst state = { ...$node['Extract Baseline IDs'].json };\n\nstate.api_calls += 1;\nstate.dispatch_completed_at = new Date().toISOString();\n\nconsole.log('Dispatch completed successfully at', state.dispatch_completed_at);\nconsole.log('Starting discovery polling...');\n\nreturn [{ json: state }];"
       },
       "id": "check-dispatch-status",
@@ -158,29 +150,25 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1250,
-        300
+        1632,
+        -32
       ]
     },
     {
-      "parameters": {
-        "amount": 5,
-        "unit": "seconds"
-      },
+      "parameters": {},
       "id": "wait-before-discovery",
       "name": "Wait Before Discovery",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        1450,
-        300
+        1824,
+        -32
       ],
       "webhookId": "discovery-wait"
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "={{ 'https://api.github.com/repos/' + $json.repo_owner + '/' + $json.repo_name + '/actions/workflows/ci.yml/runs' }}",
+        "url": "={{ 'https://api.github.com/repos/' + $json.repo_owner + '/' + $json.repo_name + '/actions/workflows/' + $json.workflow_path.split('/').pop() + '/runs' }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "githubApi",
         "sendQuery": true,
@@ -220,8 +208,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1650,
-        300
+        640,
+        208
       ],
       "credentials": {
         "githubApi": {
@@ -232,17 +220,15 @@
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "language": "javaScript",
-        "jsCode": "// Check for new run matching criteria\nlet state;\n\n// After first iteration, state comes from Wait Poll Interval (Discovery)\ntry {\n  const loopState = $node['Wait Poll Interval (Discovery)'].json;\n  if (loopState && loopState.dispatch_requested_at) {\n    state = { ...loopState };\n  }\n} catch (error) {\n  // Wait node has not executed yet on first pass\n}\n\n// First iteration fallback\nif (!state) {\n  state = { ...$node['Check Dispatch Status'].json };\n}\n\nstate.api_calls += 1;\n\nconst pollResponse = $node['Poll Discover Run'].json;\nconst current_runs = pollResponse.workflow_runs || [];\n\n// Calculate time elapsed since dispatch\nconst now = new Date();\nconst dispatch_time = new Date(state.dispatch_requested_at);\nconst elapsed_seconds = (now - dispatch_time) / 1000;\n\nconsole.log(`Discovery poll ${state.api_calls}: elapsed ${elapsed_seconds.toFixed(1)}s, checking ${current_runs.length} runs`);\n\n// Filter candidates: new runs not in baseline\nconst dispatch_threshold = new Date(dispatch_time - 5000); // 5 second clock skew tolerance\nconst candidates = current_runs.filter((run) => {\n  const is_new = !state.baseline_run_ids.includes(run.id);\n  const is_workflow_dispatch = run.event === 'workflow_dispatch';\n  const is_ci_yml = run.path === '.github/workflows/ci.yml';\n  const created_at = new Date(run.created_at);\n  const is_after_dispatch = created_at >= dispatch_threshold;\n\n  return is_new && is_workflow_dispatch && is_ci_yml && is_after_dispatch;\n});\n\nconsole.log(`Found ${candidates.length} candidate(s)`);\n\nif (candidates.length === 0) {\n  // Check timeout\n  if (elapsed_seconds > state.timeout_seconds) {\n    console.log('Discovery timeout exceeded');\n    return [{\n      json: {\n        status: 'error',\n        error_code: 'RUN_NOT_FOUND',\n        message: 'Dispatch accepted but no matching workflow_dispatch run was discovered before timeout.',\n        retryable: true,\n        context: {\n          owner: state.repo_owner,\n          repo: state.repo_name,\n          ref: state.ref,\n          timeout_seconds: state.timeout_seconds,\n          elapsed_seconds: Math.floor(elapsed_seconds),\n        },\n        request_id: state.request_id,\n      },\n    }];\n  }\n\n  // Continue polling\n  state.continue_discovery = true;\n  return [{ json: state }];\n}\n\nif (candidates.length === 1) {\n  // Found unique match\n  const matched_run = candidates[0];\n  state.matched_run_id = matched_run.id;\n  state.matched_run = matched_run;\n  state.continue_discovery = false;\n\n  console.log(`✓ Matched run ID: ${matched_run.id}`);\n  console.log(`  URL: ${matched_run.html_url}`);\n  console.log(`  Status: ${matched_run.status}`);\n\n  return [{ json: state }];\n}\n\n// Multiple candidates - ambiguous\nconsole.log('Multiple candidates found - ambiguous match');\nconst candidate_ids = candidates.map((c) => c.id);\n\nreturn [{\n  json: {\n    status: 'error',\n    error_code: 'RUN_AMBIGUOUS',\n    message: `Found ${candidates.length} matching runs, cannot uniquely identify dispatched run.`,\n    retryable: false,\n    context: {\n      owner: state.repo_owner,\n      repo: state.repo_name,\n      ref: state.ref,\n      candidate_run_ids: candidate_ids,\n    },\n    request_id: state.request_id,\n  },\n}];"
+        "jsCode": "// Check for new run matching criteria\nlet state;\n\n// After first iteration, state comes from Wait Poll Interval (Discovery)\ntry {\n  const loopState = $node['Wait Poll Interval (Discovery)'].json;\n  if (loopState && loopState.dispatch_requested_at) {\n    state = { ...loopState };\n  }\n} catch (error) {\n  // Wait node has not executed yet on first pass\n}\n\n// First iteration fallback\nif (!state) {\n  state = { ...$node['Check Dispatch Status'].json };\n}\n\nstate.api_calls += 1;\n\nconst pollResponse = $node['Poll Discover Run'].json;\nconst current_runs = pollResponse.workflow_runs || [];\n\n// Calculate time elapsed since dispatch\nconst now = new Date();\nconst dispatch_time = new Date(state.dispatch_requested_at);\nconst elapsed_seconds = (now - dispatch_time) / 1000;\n\nconsole.log(`Discovery poll ${state.api_calls}: elapsed ${elapsed_seconds.toFixed(1)}s, checking ${current_runs.length} runs`);\n\n// Filter candidates: new runs not in baseline\nconst dispatch_threshold = new Date(dispatch_time - 5000); // 5 second clock skew tolerance\nconst candidates = current_runs.filter((run) => {\n  const is_new = !state.baseline_run_ids.includes(run.id);\n  const is_workflow_dispatch = run.event === 'workflow_dispatch';\n  const is_correct_workflow = run.path === state.workflow_path;\n  const created_at = new Date(run.created_at);\n  const is_after_dispatch = created_at >= dispatch_threshold;\n\n  return is_new && is_workflow_dispatch && is_correct_workflow && is_after_dispatch;\n});\n\nconsole.log(`Found ${candidates.length} candidate(s)`);\n\nif (candidates.length === 0) {\n  // Check timeout\n  if (elapsed_seconds > state.timeout_seconds) {\n    console.log('Discovery timeout exceeded');\n    return [{\n      json: {\n        status: 'error',\n        error_code: 'RUN_NOT_FOUND',\n        message: 'Dispatch accepted but no matching workflow_dispatch run was discovered before timeout.',\n        retryable: true,\n        context: {\n          owner: state.repo_owner,\n          repo: state.repo_name,\n          ref: state.ref,\n          timeout_seconds: state.timeout_seconds,\n          elapsed_seconds: Math.floor(elapsed_seconds),\n        },\n        request_id: state.request_id,\n      },\n    }];\n  }\n\n  // Continue polling\n  state.continue_discovery = true;\n  return [{ json: state }];\n}\n\nif (candidates.length === 1) {\n  // Found unique match\n  const matched_run = candidates[0];\n  state.matched_run_id = matched_run.id;\n  state.matched_run = matched_run;\n  state.continue_discovery = false;\n\n  console.log(`✓ Matched run ID: ${matched_run.id}`);\n  console.log(`  URL: ${matched_run.html_url}`);\n  console.log(`  Status: ${matched_run.status}`);\n\n  return [{ json: state }];\n}\n\n// Multiple candidates - ambiguous\nconsole.log('Multiple candidates found - ambiguous match');\nconst candidate_ids = candidates.map((c) => c.id);\n\nreturn [{\n  json: {\n    status: 'error',\n    error_code: 'RUN_AMBIGUOUS',\n    message: `Found ${candidates.length} matching runs, cannot uniquely identify dispatched run.`,\n    retryable: false,\n    context: {\n      owner: state.repo_owner,\n      repo: state.repo_name,\n      ref: state.ref,\n      candidate_run_ids: candidate_ids,\n    },\n    request_id: state.request_id,\n  },\n}];"
       },
       "id": "check-discovery-result",
       "name": "Check Discovery Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1850,
-        300
+        832,
+        208
       ]
     },
     {
@@ -274,28 +260,26 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        2050,
-        300
+        1040,
+        208
       ]
     },
     {
       "parameters": {
-        "amount": "={{ $json.poll_interval_seconds }}",
-        "unit": "seconds"
+        "amount": "={{ $json.poll_interval_seconds }}"
       },
       "id": "wait-poll-interval-discovery",
       "name": "Wait Poll Interval (Discovery)",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        2250,
-        200
+        1232,
+        208
       ],
       "webhookId": "discovery-poll-wait"
     },
     {
       "parameters": {
-        "method": "GET",
         "url": "={{ 'https://api.github.com/repos/' + $json.repo_owner + '/' + $json.repo_name + '/actions/runs/' + $json.matched_run_id }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "githubApi",
@@ -319,8 +303,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2250,
-        400
+        1264,
+        416
       ],
       "credentials": {
         "githubApi": {
@@ -331,8 +315,6 @@
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "language": "javaScript",
         "jsCode": "// Check run completion status\nlet state;\n\n// After first completion poll, state comes from Wait Poll Interval (Completion)\ntry {\n  const loopState = $node['Wait Poll Interval (Completion)'].json;\n  if (loopState && loopState.matched_run_id) {\n    state = { ...loopState };\n  }\n} catch (error) {\n  // Wait node has not executed yet on first pass\n}\n\n// First completion poll fallback\nif (!state) {\n  state = { ...$node['Check Discovery Result'].json };\n}\n\nstate.api_calls += 1;\n\nconst runDetail = $node['Poll Run Completion'].json;\n\nconsole.log(`Completion poll: run ${runDetail.id}, status=${runDetail.status}, conclusion=${runDetail.conclusion || 'null'}`);\n\n// Check if run is completed\nif (runDetail.status === 'completed') {\n  console.log('✓ Run completed');\n  state.final_run = runDetail;\n  state.continue_completion = false;\n  return [{ json: state }];\n}\n\n// Check timeout\nconst now = new Date();\nconst dispatch_time = new Date(state.dispatch_requested_at);\nconst elapsed_seconds = (now - dispatch_time) / 1000;\n\nif (elapsed_seconds > state.timeout_seconds) {\n  console.log('Completion timeout exceeded');\n  return [{\n    json: {\n      status: 'error',\n      error_code: 'POLL_TIMEOUT',\n      message: 'Run discovered but did not complete before timeout.',\n      retryable: true,\n      context: {\n        owner: state.repo_owner,\n        repo: state.repo_name,\n        ref: state.ref,\n        run_id: state.matched_run_id,\n        run_url: runDetail.html_url,\n        timeout_seconds: state.timeout_seconds,\n        elapsed_seconds: Math.floor(elapsed_seconds),\n      },\n      request_id: state.request_id,\n    },\n  }];\n}\n\n// Continue polling\nstate.continue_completion = true;\nreturn [{ json: state }];"
       },
       "id": "check-completion-status",
@@ -340,8 +322,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2450,
-        400
+        1472,
+        416
       ]
     },
     {
@@ -373,29 +355,26 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        2650,
-        400
+        1664,
+        416
       ]
     },
     {
       "parameters": {
-        "amount": "={{ $json.poll_interval_seconds }}",
-        "unit": "seconds"
+        "amount": "={{ $json.poll_interval_seconds }}"
       },
       "id": "wait-poll-interval-completion",
       "name": "Wait Poll Interval (Completion)",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
-        2850,
-        300
+        1872,
+        400
       ],
       "webhookId": "completion-poll-wait"
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "language": "javaScript",
         "jsCode": "// Format final output\nconst items = $input.all();\nconst stateItem = items[0];\nconst state = stateItem.json;\n\n// Check if this is an error output (already formatted)\nif (state.status === 'error') {\n  console.log('Error output:', state.error_code);\n  return [{ json: state }];\n}\n\n// Normal completion output\nconst run = state.final_run;\nconst ci_success = run.conclusion === 'success';\n\nconst output = {\n  status: 'completed',\n  ci_success,\n  conclusion: run.conclusion,\n  workflow: {\n    owner: state.repo_owner,\n    repo: state.repo_name,\n    path: state.workflow_path,\n    ref: state.ref\n  },\n  run: {\n    id: run.id,\n    html_url: run.html_url,\n    event: run.event,\n    status: run.status,\n    conclusion: run.conclusion,\n    head_branch: run.head_branch,\n    head_sha: run.head_sha,\n    created_at: run.created_at,\n    run_started_at: run.run_started_at,\n    updated_at: run.updated_at\n  },\n  polling: {\n    timeout_seconds: state.timeout_seconds,\n    poll_interval_seconds: state.poll_interval_seconds,\n    api_calls: state.api_calls\n  },\n  request_id: state.request_id\n};\n\nconsole.log('Final output:', JSON.stringify(output, null, 2));\n\nreturn [{ json: output }];"
       },
       "id": "format-output",
@@ -403,8 +382,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2650,
-        600
+        1664,
+        672
       ]
     }
   ],
@@ -595,9 +574,9 @@
   "staticData": null,
   "meta": null,
   "pinData": {},
-  "versionId": "bbc5860d-ea40-4d8e-9bf9-94334aee3e8f",
+  "versionId": "fd1ccd9d-fa9f-44e2-86a5-6372defa7f46",
   "activeVersionId": null,
-  "versionCounter": 9,
+  "versionCounter": 15,
   "triggerCount": 0,
   "tags": [],
   "shared": [

@@ -1,0 +1,263 @@
+{
+  "updatedAt": "2026-02-12T13:31:39.361Z",
+  "createdAt": "2026-02-12T00:00:00.000Z",
+  "id": "github-multi-ci-suite-parent",
+  "name": "Dispatch Multi-Repo CI Suite And Capture Results",
+  "description": "Manual parent workflow that triggers multiple GitHub Actions checks across gSnake repositories and returns aggregated CI suite result",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        256,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Target Matrix and convert to multiple items\nconst items = $input.all();\nconst input = items.length > 0 ? items[0].json : {};\n\n// Extract optional runtime controls\nconst default_ref = input.ref || 'main';\nconst timeout_seconds = input.timeout_seconds || 3600;\nconst poll_interval_seconds = input.poll_interval_seconds || 15;\nconst fail_fast = input.fail_fast || false;\nconst selected_targets = input.selected_targets || null;\n\n// Define normative six-target matrix\nconst full_matrix = [\n  {\"repo_owner\":\"NNTin\",\"repo_name\":\"gSnake\",\"workflow_path\":\".github/workflows/ci.yml\",\"ref\":\"main\",\"target_id\":\"gsnake-ci\"},\n  {\"repo_owner\":\"NNTin\",\"repo_name\":\"gsnake-web\",\"workflow_path\":\".github/workflows/ci.yml\",\"ref\":\"main\",\"target_id\":\"gsnake-web-ci\"},\n  {\"repo_owner\":\"NNTin\",\"repo_name\":\"gsnake-specs\",\"workflow_path\":\".github/workflows/ci.yml\",\"ref\":\"main\",\"target_id\":\"gsnake-specs-ci\"},\n  {\"repo_owner\":\"NNTin\",\"repo_name\":\"gsnake-levels\",\"workflow_path\":\".github/workflows/ci.yml\",\"ref\":\"main\",\"target_id\":\"gsnake-levels-ci\"},\n  {\"repo_owner\":\"NNTin\",\"repo_name\":\"gsnake-editor\",\"workflow_path\":\".github/workflows/ci.yml\",\"ref\":\"main\",\"target_id\":\"gsnake-editor-ci\"},\n  {\"repo_owner\":\"NNTin\",\"repo_name\":\"gsnake-specs\",\"workflow_path\":\".github/workflows/test.yml\",\"ref\":\"main\",\"target_id\":\"gsnake-specs-test\"}\n];\n\n// Apply selected_targets filter if provided\nlet targets = full_matrix;\nif (selected_targets && Array.isArray(selected_targets) && selected_targets.length > 0) {\n  targets = full_matrix.filter(t => selected_targets.includes(t.target_id));\n}\n\n// Store suite metadata and started_at timestamp\nconst started_at = new Date().toISOString();\nconst total_targets = targets.length;\n\nconsole.log(`Built target matrix with ${total_targets} targets`);\nconsole.log('Targets:', targets.map(t => t.target_id).join(', '));\n\n// Output each target as a separate item with suite metadata attached\nreturn targets.map(target => ({\n  json: {\n    ...target,\n    ref: default_ref,\n    timeout_seconds,\n    poll_interval_seconds,\n    request_id: `multi-ci-${started_at}-${target.target_id}`,\n    // Suite metadata for aggregation\n    _suite_started_at: started_at,\n    _suite_total_targets: total_targets,\n    _suite_fail_fast: fail_fast\n  }\n}));"
+      },
+      "id": "build-target-matrix",
+      "name": "Build Target Matrix",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "loop-targets",
+      "name": "Loop Targets",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        656,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract target payload for child workflow (remove suite metadata)\nconst item = $input.first().json;\n\nconst target_payload = {\n  repo_owner: item.repo_owner,\n  repo_name: item.repo_name,\n  workflow_path: item.workflow_path,\n  ref: item.ref,\n  timeout_seconds: item.timeout_seconds,\n  poll_interval_seconds: item.poll_interval_seconds,\n  request_id: item.request_id\n};\n\nconsole.log(`Executing target: ${item.target_id}`);\n\nreturn [{ json: target_payload }];"
+      },
+      "id": "prepare-child-input",
+      "name": "Prepare Child Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "github-ci-dispatch-result",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/github-ci-dispatch-result",
+          "cachedResultName": "Dispatch GitHub CI And Capture Result"
+        },
+        "options": {}
+      },
+      "id": "execute-child-workflow",
+      "name": "Execute Child Workflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1056,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize child output and merge with target metadata\nconst loop_item = $node['Loop Targets'].json;\nconst child_output = $input.first().json;\n\n// Map child output to parent result schema\nconst result = {\n  target_id: loop_item.target_id,\n  repo_owner: loop_item.repo_owner,\n  repo_name: loop_item.repo_name,\n  workflow_path: loop_item.workflow_path,\n  ref: loop_item.ref,\n  status: child_output.status,\n  request_id: loop_item.request_id\n};\n\nif (child_output.status === 'completed') {\n  result.ci_success = child_output.ci_success;\n  result.conclusion = child_output.conclusion;\n  result.run_id = child_output.run?.id || null;\n  result.run_url = child_output.run?.html_url || null;\n} else if (child_output.status === 'error') {\n  result.ci_success = null;\n  result.error_code = child_output.error_code;\n  result.error_message = child_output.message;\n  result.retryable = child_output.retryable;\n}\n\nconsole.log(`Result for ${result.target_id}: status=${result.status}, ci_success=${result.ci_success}`);\n\n// Attach suite metadata for final aggregation\nresult._suite_started_at = loop_item._suite_started_at;\nresult._suite_total_targets = loop_item._suite_total_targets;\nresult._suite_fail_fast = loop_item._suite_fail_fast;\n\n// Check fail_fast condition\nif (loop_item._suite_fail_fast) {\n  const is_failure = result.status === 'error' || (result.status === 'completed' && !result.ci_success);\n  if (is_failure) {\n    console.log('Fail-fast triggered for', result.target_id);\n    result._should_stop = true;\n  }\n}\n\nreturn [{ json: result }];"
+      },
+      "id": "normalize-result",
+      "name": "Normalize Per-Target Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1264,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "should-stop-condition",
+              "leftValue": "={{ $json._should_stop }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-fail-fast",
+      "name": "Check Fail Fast",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1456,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate Suite Summary from all result items\nconst items = $input.all();\n\nif (items.length === 0) {\n  return [{\n    json: {\n      status: 'error',\n      error_code: 'NO_RESULTS',\n      message: 'No targets were executed',\n      overall_success: false\n    }\n  }];\n}\n\n// Extract suite metadata from first item\nconst first_item = items[0].json;\nconst started_at = first_item._suite_started_at;\nconst total_targets = first_item._suite_total_targets;\n\nconsole.log(`Aggregating results for ${items.length} executed targets out of ${total_targets} total`);\n\n// Compute summary counts\nlet passed = 0;\nlet failed = 0;\nlet errors = 0;\n\nconst results = [];\n\nfor (const item of items) {\n  const result = { ...item.json };\n  \n  // Remove internal metadata\n  delete result._suite_started_at;\n  delete result._suite_total_targets;\n  delete result._suite_fail_fast;\n  delete result._should_stop;\n  \n  results.push(result);\n  \n  // Count by status\n  if (result.status === 'completed') {\n    if (result.ci_success === true) {\n      passed += 1;\n    } else {\n      failed += 1;\n    }\n  } else if (result.status === 'error') {\n    errors += 1;\n  }\n}\n\nconst overall_success = (failed === 0 && errors === 0);\n\nconst finished_at = new Date().toISOString();\nconst start = new Date(started_at);\nconst end = new Date(finished_at);\nconst duration_seconds = Math.floor((end - start) / 1000);\n\nconst output = {\n  status: 'completed',\n  overall_success,\n  summary: {\n    total: total_targets,\n    passed,\n    failed,\n    errors\n  },\n  results,\n  started_at,\n  finished_at,\n  duration_seconds\n};\n\nconsole.log('Suite Summary:', output.summary);\nconsole.log('Overall Success:', output.overall_success);\nconsole.log('Duration:', duration_seconds, 'seconds');\n\nreturn [{ json: output }];"
+      },
+      "id": "aggregate-summary",
+      "name": "Aggregate Suite Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1664,
+        288
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Target Matrix",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Target Matrix": {
+      "main": [
+        [
+          {
+            "node": "Loop Targets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Targets": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Suite Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Child Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Child Input": {
+      "main": [
+        [
+          {
+            "node": "Execute Child Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Child Workflow": {
+      "main": [
+        [
+          {
+            "node": "Normalize Per-Target Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Per-Target Result": {
+      "main": [
+        [
+          {
+            "node": "Check Fail Fast",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Fail Fast": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Suite Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Targets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "63c1396e-5996-420e-bd93-91a37cbefbc8",
+  "activeVersionId": null,
+  "versionCounter": 15,
+  "triggerCount": 0,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-02-12T13:01:38.673Z",
+      "createdAt": "2026-02-12T13:01:38.673Z",
+      "role": "workflow:owner",
+      "workflowId": "github-multi-ci-suite-parent",
+      "projectId": "dSnNZv7zF1AxLQD6",
+      "project": {
+        "updatedAt": "2026-01-24T12:56:35.595Z",
+        "createdAt": "2026-01-23T22:48:06.540Z",
+        "id": "dSnNZv7zF1AxLQD6",
+        "name": "Tin Nguyen <nguyen.ngoctindaniel@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "83ee6f71-c12c-418b-91c6-9096f2edc160"
+      }
+    }
+  ]
+}
