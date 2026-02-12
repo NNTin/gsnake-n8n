@@ -135,10 +135,61 @@
         1664,
         288
       ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger (Every 8 Hours)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        256,
+        504
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "github-parent-ci-failure-issue-manager",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/github-parent-ci-failure-issue-manager",
+          "cachedResultName": "Manage Parent Repo CI Failure Issue"
+        },
+        "options": {}
+      },
+      "id": "trigger-issue-manager",
+      "name": "Trigger Issue Manager Workflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        1856,
+        288
+      ]
     }
   ],
   "connections": {
     "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Target Matrix",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger (Every 8 Hours)": {
       "main": [
         [
           {
@@ -223,6 +274,17 @@
         [
           {
             "node": "Loop Targets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Suite Summary": {
+      "main": [
+        [
+          {
+            "node": "Trigger Issue Manager Workflow",
             "type": "main",
             "index": 0
           }

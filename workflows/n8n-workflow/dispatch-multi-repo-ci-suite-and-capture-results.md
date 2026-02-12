@@ -6,22 +6,23 @@ workflow_id: github-multi-ci-suite-parent
 last_updated: "2026-02-12T00:00:00Z"
 dependencies:
   - workflows/n8n-workflow/dispatch-github-ci-and-capture-result.md
+  - workflows/n8n-workflow/manage-parent-repo-ci-failure-issue.md
   - .github/workflows/ci.yml
   - gsnake-web/.github/workflows/ci.yml
   - gsnake-specs/.github/workflows/ci.yml
   - gsnake-levels/.github/workflows/ci.yml
   - gsnake-editor/.github/workflows/ci.yml
   - gsnake-specs/.github/workflows/test.yml
-tags: ["github", "ci", "workflow-dispatch", "n8n-workflow", "manual-trigger", "orchestration", "multi-repo"]
+tags: ["github", "ci", "workflow-dispatch", "n8n-workflow", "manual-trigger", "schedule-trigger", "orchestration", "multi-repo", "workflow-chaining"]
 ---
 
 # Dispatch Multi-Repo CI Suite And Capture Results
 
-Manual parent n8n workflow that triggers multiple GitHub Actions checks across gSnake repositories, waits for completion through a reusable child workflow, and returns one aggregated CI suite result.
+Parent n8n workflow with two triggers (manual and every-8-hours schedule) that runs multiple GitHub Actions checks across gSnake repositories, aggregates CI results, and then triggers a dedicated issue-management workflow.
 
 ## Objective
 
-**What**: Run the following six GitHub Actions workflows from one manual n8n execution:
+**What**: Run the following six GitHub Actions workflows from one parent n8n execution:
 - `NNTin/gSnake` -> `.github/workflows/ci.yml`
 - `NNTin/gsnake-web` -> `.github/workflows/ci.yml`
 - `NNTin/gsnake-specs` -> `.github/workflows/ci.yml`
@@ -29,9 +30,11 @@ Manual parent n8n workflow that triggers multiple GitHub Actions checks across g
 - `NNTin/gsnake-editor` -> `.github/workflows/ci.yml`
 - `NNTin/gsnake-specs` -> `.github/workflows/test.yml`
 
-**Why**: Provide a single manual quality gate that confirms the cross-repository CI surface before release, merge, or deployment activities.
+**Why**: Provide both on-demand and recurring automated CI validation, then hand off result handling to the issue-management workflow.
 
-**When**: Use when an operator wants to validate the full gSnake CI suite on demand and get a deterministic pass/fail summary.
+**When**:
+- Manual trigger for operator-initiated validation.
+- Schedule trigger every 8 hours for recurring validation.
 
 ---
 
@@ -45,9 +48,10 @@ DEFAULT_CHILD_POLL_INTERVAL_SECONDS="15"  # Optional poll interval passed to chi
 ```
 
 **External Dependencies** (required):
-- n8n instance with ability to run manually triggered workflows.
+- n8n instance with ability to run manual and scheduled workflows.
 - Child workflow implemented and available:
   - `github-ci-dispatch-result` (from `workflows/n8n-workflow/dispatch-github-ci-and-capture-result.md`)
+  - `github-parent-ci-failure-issue-manager` (from `workflows/n8n-workflow/manage-parent-repo-ci-failure-issue.md`)
 - GitHub Actions workflow files exist and are dispatchable:
   - `.github/workflows/ci.yml`
   - `gsnake-web/.github/workflows/ci.yml`
@@ -59,20 +63,23 @@ DEFAULT_CHILD_POLL_INTERVAL_SECONDS="15"  # Optional poll interval passed to chi
 **Required Permissions**:
 - Parent workflow can execute child workflows (`Execute Workflow` node).
 - Child workflow credential (`github_actions_token`) can dispatch and read Actions runs in all listed repositories.
+- Parent workflow can trigger `github-parent-ci-failure-issue-manager` after CI aggregation.
 
 ---
 
 ## Implementation Details
 
-**Tool Type**: n8n workflow (manual trigger parent orchestration)
+**Tool Type**: n8n workflow (manual + scheduled parent orchestration)
 
 **Location**: `tools/n8n-flows/github-multi-ci-suite-parent.json`
 
 **Key Technologies**:
 - n8n `Manual Trigger`
+- n8n `Schedule Trigger` (every 8 hours)
 - n8n `Code` node for matrix generation and result aggregation
 - n8n `Loop Over Items` (or equivalent sequential iterator)
 - n8n `Execute Workflow` node calling `github-ci-dispatch-result`
+- n8n `Execute Workflow` node calling `github-parent-ci-failure-issue-manager`
 
 **Child Workflow Contract Delta (minimal change)**:
 - Keep `github-ci-dispatch-result` behavior unchanged except one optional input:
@@ -106,15 +113,25 @@ Execute the parent workflow from n8n UI using manual trigger.
 - `fail_fast` (default `false`): stop after first non-success result when `true`.
 - `selected_targets` (optional): subset of `target_id` values for partial runs.
 
+### Run Full CI Suite (Scheduled Every 8 Hours)
+
+Configure a `Schedule Trigger` node with an 8-hour cadence.
+
+Cron example:
+```text
+0 */8 * * *
+```
+
 **What it does (step-by-step):**
-1. Starts from `Manual Trigger`.
+1. Starts from `Manual Trigger` or `Schedule Trigger`.
 2. Builds target matrix and applies optional runtime overrides.
 3. Iterates through targets and invokes child workflow once per target.
 4. Captures each child response exactly as returned (`completed` or `error`).
 5. Aggregates summary counts and computes overall suite status.
-6. Returns one normalized payload with per-target details and final pass/fail.
+6. Triggers `github-parent-ci-failure-issue-manager` and passes the aggregated suite payload.
 
-**Expected output (suite success):**
+**Aggregated payload passed to issue-manager workflow (suite success):**
+
 ```json
 {
   "status": "completed",
@@ -140,7 +157,7 @@ Execute the parent workflow from n8n UI using manual trigger.
 }
 ```
 
-**Expected output (suite has failures):**
+**Aggregated payload passed to issue-manager workflow (suite has failures):**
 ```json
 {
   "status": "completed",
@@ -155,7 +172,7 @@ Execute the parent workflow from n8n UI using manual trigger.
 }
 ```
 
-**Expected output (orchestration/child errors):**
+**Aggregated payload passed to issue-manager workflow (orchestration/child errors):**
 ```json
 {
   "status": "completed",
@@ -183,7 +200,11 @@ Execute the parent workflow from n8n UI using manual trigger.
 
 ### Input Format
 
-This workflow is manual-first and can run with no external input. If inputs are provided (for repeatable automation), use:
+This workflow supports two trigger sources:
+- Manual trigger
+- Schedule trigger every 8 hours
+
+If inputs are provided (for repeatable automation), use:
 
 ```json
 {
@@ -214,6 +235,8 @@ Each iteration sends one payload to `github-ci-dispatch-result`:
 ```
 
 ### Output Format
+
+Aggregated payload produced by this workflow and passed to `github-parent-ci-failure-issue-manager`:
 
 ```json
 {
@@ -255,40 +278,51 @@ Each iteration sends one payload to `github-ci-dispatch-result`:
 1. **Manual Trigger** (`n8n-nodes-base.manualTrigger`)
    - Purpose: explicit operator-triggered suite run.
 
-2. **Build Target Matrix** (`n8n-nodes-base.code`)
+2. **Schedule Trigger** (`n8n-nodes-base.scheduleTrigger`)
+   - Purpose: recurring suite run every 8 hours.
+   - Schedule: every 8 hours (cron example `0 */8 * * *`).
+
+3. **Build Target Matrix** (`n8n-nodes-base.code`)
    - Purpose: define fixed six-target list and apply optional overrides.
 
-3. **Loop Targets** (`n8n-nodes-base.splitInBatches` or `n8n-nodes-base.loopOverItems`)
+4. **Loop Targets** (`n8n-nodes-base.splitInBatches` or `n8n-nodes-base.loopOverItems`)
    - Purpose: deterministic per-target execution.
 
-4. **Execute Child Workflow** (`n8n-nodes-base.executeWorkflow`)
+5. **Execute Child Workflow** (`n8n-nodes-base.executeWorkflow`)
    - Workflow: `github-ci-dispatch-result`
    - Wait for completion: `true`
 
-5. **Normalize Per-Target Result** (`n8n-nodes-base.code`)
+6. **Normalize Per-Target Result** (`n8n-nodes-base.code`)
    - Purpose: map child output into parent result schema.
 
-6. **Aggregate Suite Summary** (`n8n-nodes-base.code`)
+7. **Aggregate Suite Summary** (`n8n-nodes-base.code`)
    - Purpose: compute `passed`, `failed`, `errors`, `overall_success`.
 
-7. **Return Final Payload** (`n8n-nodes-base.code` or `Set`)
-   - Purpose: stable output contract for manual review and downstream automation.
+8. **Trigger Issue Manager Workflow** (`n8n-nodes-base.executeWorkflow`)
+   - Workflow: `github-parent-ci-failure-issue-manager`
+   - Wait for completion: `true` (recommended for deterministic handoff status)
+   - Input: aggregated suite payload from `Aggregate Suite Summary`.
 
 **Node Connections (logical):**
 ```
 Manual Trigger
   -> Build Target Matrix
+Schedule Trigger (8h)
+  -> Build Target Matrix
+Build Target Matrix
   -> Loop Targets
   -> Execute Child Workflow
   -> Normalize Per-Target Result
   -> (back to Loop until done)
   -> Aggregate Suite Summary
-  -> Return Final Payload
+  -> Trigger Issue Manager Workflow
 ```
 
 **Credentials Needed:**
 - No direct GitHub credential in parent.
-- Parent relies on child workflow credential `github_actions_token`.
+- Parent relies on child workflow credential `github_actions_token` through:
+  - `github-ci-dispatch-result`
+  - `github-parent-ci-failure-issue-manager`
 
 ---
 
@@ -307,8 +341,8 @@ Manual Trigger
 - Do not log secrets or credential objects.
 
 **Attack Surface:**
-- Manual trigger only; no external ingress.
-- Primary risk is misuse of an over-scoped GitHub token in child workflow.
+- Manual and scheduled internal triggers only; no external ingress.
+- Primary risk is misuse of an over-scoped GitHub token in child workflows.
 
 ---
 
@@ -346,12 +380,22 @@ Manual Trigger
 1. Provide `selected_targets=["gsnake-ci","gsnake-web-ci"]`.
 2. Verify only those two targets run and `summary.total=2`.
 
+**Test Case 6: Schedule Trigger Every 8 Hours**
+1. Configure schedule trigger for every 8 hours.
+2. Confirm a scheduled run executes without manual input.
+3. Verify full CI suite runs and reaches the final trigger node.
+
+**Test Case 7: Final Handoff To Issue-Manager Workflow**
+1. Execute parent workflow (manual or scheduled).
+2. Verify `Trigger Issue Manager Workflow` node executes after `Aggregate Suite Summary`.
+3. Verify child workflow `github-parent-ci-failure-issue-manager` receives the aggregated payload.
+
 ### Testing via n8n UI
 
 1. Navigate to `https://n8n.labs.lair.nntin.xyz/workflow/github-multi-ci-suite-parent`
 2. Click **Test workflow**
 3. Optionally provide runtime overrides
-4. Verify final output schema and per-target run URLs
+4. Verify aggregated suite payload and that `Trigger Issue Manager Workflow` executed successfully
 
 ---
 
@@ -387,6 +431,22 @@ Manual Trigger
 
 ---
 
+### Error: ISSUE_MANAGER_TRIGGER_FAILED
+
+**Symptom:** Final `Trigger Issue Manager Workflow` node fails.
+
+**Possible Causes:**
+1. `github-parent-ci-failure-issue-manager` workflow missing/not imported
+2. Workflow ID mismatch
+3. Child workflow runtime error
+
+**Resolution:**
+1. Import workflow JSON via `./tools/scripts/sync-workflows.sh import`
+2. Rebind final execute node to workflow ID `github-parent-ci-failure-issue-manager`
+3. Inspect child workflow execution logs and fix child error
+
+---
+
 ### Error: PARTIAL_SUITE_FAILURE
 
 **Symptom:** Suite completes with mixed results.
@@ -419,6 +479,11 @@ Manual Trigger
 - **Behavior:** Aggregate both under one output with `failed` and `errors` counts.
 - **Handling:** Treat both as `overall_success=false`.
 
+**Edge Case 4: Schedule overlap with long execution**
+- **Condition:** Next 8-hour schedule window starts before previous execution finished.
+- **Behavior:** Multiple parent executions can overlap.
+- **Handling:** Configure workflow concurrency limits if overlap is undesirable.
+
 ---
 
 ## Performance Considerations
@@ -438,9 +503,11 @@ Manual Trigger
 
 **What gets logged:**
 - Parent run start/end timestamps
+- Trigger source (`manual` or `schedule`)
 - Target dispatch order (`target_id`)
 - Per-target child status and run URL
 - Aggregated summary (`passed`, `failed`, `errors`)
+- Final handoff node execution status to issue-manager workflow
 
 **What must not be logged:**
 - Tokens
@@ -450,11 +517,13 @@ Manual Trigger
 ```json
 {
   "request_id": "multi-ci-2026-02-12T00:00:00Z",
+  "trigger_source": "schedule",
   "target_id": "gsnake-specs-test",
   "repo_name": "gsnake-specs",
   "workflow_path": ".github/workflows/test.yml",
   "status": "completed",
-  "ci_success": true
+  "ci_success": true,
+  "issue_workflow_triggered": true
 }
 ```
 
@@ -464,18 +533,20 @@ Manual Trigger
 
 **Upstream Dependencies:**
 - Manual operator execution in n8n UI.
+- Schedule trigger execution every 8 hours.
 - Optional upstream parent if this workflow is later reused as child.
 
 **Downstream Dependencies:**
 - `github-ci-dispatch-result` child workflow.
+- `github-parent-ci-failure-issue-manager` child workflow.
 - GitHub Actions workflows listed in objective.
 
 **Data Flow Diagram:**
 ```
-[Manual Trigger]
+[Manual Trigger | Schedule Trigger (8h)]
   -> [Parent: github-multi-ci-suite-parent]
   -> [Child: github-ci-dispatch-result] x N targets
   -> [GitHub Actions runs]
   -> [Parent aggregates results]
-  -> [Single suite result payload]
+  -> [Child: github-parent-ci-failure-issue-manager]
 ```
