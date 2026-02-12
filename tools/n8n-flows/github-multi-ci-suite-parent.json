@@ -4,7 +4,7 @@
   "id": "github-multi-ci-suite-parent",
   "name": "Dispatch Multi-Repo CI Suite And Capture Results",
   "description": "Manual parent workflow that triggers multiple GitHub Actions checks across gSnake repositories and returns aggregated CI suite result",
-  "active": false,
+  "active": true,
   "isArchived": false,
   "nodes": [
     {
@@ -299,9 +299,9 @@
   "meta": null,
   "pinData": {},
   "versionId": "77c35057-cbfc-4d4a-b824-d8be3b399892",
-  "activeVersionId": null,
-  "versionCounter": 29,
-  "triggerCount": 0,
+  "activeVersionId": "77c35057-cbfc-4d4a-b824-d8be3b399892",
+  "versionCounter": 31,
+  "triggerCount": 1,
   "tags": [],
   "shared": [
     {
