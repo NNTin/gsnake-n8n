@@ -201,7 +201,12 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "retry": {
+            "maxRetries": 3,
+            "waitBetweenRetries": 60000
+          }
+        }
       },
       "id": "poll-discover-run",
       "name": "Poll Discover Run",
@@ -296,7 +301,12 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "retry": {
+            "maxRetries": 3,
+            "waitBetweenRetries": 60000
+          }
+        }
       },
       "id": "poll-run-completion",
       "name": "Poll Run Completion",
@@ -574,7 +584,7 @@
   "staticData": null,
   "meta": null,
   "pinData": {},
-  "versionId": "fd1ccd9d-fa9f-44e2-86a5-6372defa7f46",
+  "versionId": "f48d1bfc-3869-4ff1-bab9-fef3447e3717",
   "activeVersionId": null,
   "versionCounter": 15,
   "triggerCount": 0,

@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-02-12T13:31:39.361Z",
+  "updatedAt": "2026-02-12T16:21:56.759Z",
   "createdAt": "2026-02-12T00:00:00.000Z",
   "id": "github-multi-ci-suite-parent",
   "name": "Dispatch Multi-Repo CI Suite And Capture Results",
@@ -20,7 +20,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Build Target Matrix and convert to multiple items\nconst items = $input.all();\nconst input = items.length > 0 ? items[0].json : {};\n\n// Extract optional runtime controls\nconst default_ref = input.ref || 'main';\nconst timeout_seconds = input.timeout_seconds || 3600;\nconst poll_interval_seconds = input.poll_interval_seconds || 15;\nconst fail_fast = input.fail_fast || false;\nconst selected_targets = input.selected_targets || null;\n\n// Define normative six-target matrix\nconst full_matrix = [\n  {\"repo_owner\":\"NNTin\",\"repo_name\":\"gSnake\",\"workflow_path\":\".github/workflows/ci.yml\",\"ref\":\"main\",\"target_id\":\"gsnake-ci\"},\n  {\"repo_owner\":\"NNTin\",\"repo_name\":\"gsnake-web\",\"workflow_path\":\".github/workflows/ci.yml\",\"ref\":\"main\",\"target_id\":\"gsnake-web-ci\"},\n  {\"repo_owner\":\"NNTin\",\"repo_name\":\"gsnake-specs\",\"workflow_path\":\".github/workflows/ci.yml\",\"ref\":\"main\",\"target_id\":\"gsnake-specs-ci\"},\n  {\"repo_owner\":\"NNTin\",\"repo_name\":\"gsnake-levels\",\"workflow_path\":\".github/workflows/ci.yml\",\"ref\":\"main\",\"target_id\":\"gsnake-levels-ci\"},\n  {\"repo_owner\":\"NNTin\",\"repo_name\":\"gsnake-editor\",\"workflow_path\":\".github/workflows/ci.yml\",\"ref\":\"main\",\"target_id\":\"gsnake-editor-ci\"},\n  {\"repo_owner\":\"NNTin\",\"repo_name\":\"gsnake-specs\",\"workflow_path\":\".github/workflows/test.yml\",\"ref\":\"main\",\"target_id\":\"gsnake-specs-test\"}\n];\n\n// Apply selected_targets filter if provided\nlet targets = full_matrix;\nif (selected_targets && Array.isArray(selected_targets) && selected_targets.length > 0) {\n  targets = full_matrix.filter(t => selected_targets.includes(t.target_id));\n}\n\n// Store suite metadata and started_at timestamp\nconst started_at = new Date().toISOString();\nconst total_targets = targets.length;\n\nconsole.log(`Built target matrix with ${total_targets} targets`);\nconsole.log('Targets:', targets.map(t => t.target_id).join(', '));\n\n// Output each target as a separate item with suite metadata attached\nreturn targets.map(target => ({\n  json: {\n    ...target,\n    ref: default_ref,\n    timeout_seconds,\n    poll_interval_seconds,\n    request_id: `multi-ci-${started_at}-${target.target_id}`,\n    // Suite metadata for aggregation\n    _suite_started_at: started_at,\n    _suite_total_targets: total_targets,\n    _suite_fail_fast: fail_fast\n  }\n}));"
+        "jsCode": "// Build Target Matrix and convert to multiple items\nconst items = $input.all();\nconst input = items.length > 0 ? items[0].json : {};\n\n// Extract optional runtime controls\nconst default_ref = input.ref || 'main';\nconst timeout_seconds = input.timeout_seconds || 3600;\nconst poll_interval_seconds = input.poll_interval_seconds || 30;  // Increased from 15 to 30 seconds to reduce API pressure\nconst fail_fast = input.fail_fast || false;\nconst selected_targets = input.selected_targets || null;\n\n// Define normative six-target matrix\nconst full_matrix = [\n  {\"repo_owner\":\"NNTin\",\"repo_name\":\"gSnake\",\"workflow_path\":\".github/workflows/ci.yml\",\"ref\":\"main\",\"target_id\":\"gsnake-ci\"},\n  {\"repo_owner\":\"NNTin\",\"repo_name\":\"gsnake-web\",\"workflow_path\":\".github/workflows/ci.yml\",\"ref\":\"main\",\"target_id\":\"gsnake-web-ci\"},\n  {\"repo_owner\":\"NNTin\",\"repo_name\":\"gsnake-specs\",\"workflow_path\":\".github/workflows/ci.yml\",\"ref\":\"main\",\"target_id\":\"gsnake-specs-ci\"},\n  {\"repo_owner\":\"NNTin\",\"repo_name\":\"gsnake-levels\",\"workflow_path\":\".github/workflows/ci.yml\",\"ref\":\"main\",\"target_id\":\"gsnake-levels-ci\"},\n  {\"repo_owner\":\"NNTin\",\"repo_name\":\"gsnake-editor\",\"workflow_path\":\".github/workflows/ci.yml\",\"ref\":\"main\",\"target_id\":\"gsnake-editor-ci\"},\n  {\"repo_owner\":\"NNTin\",\"repo_name\":\"gsnake-specs\",\"workflow_path\":\".github/workflows/test.yml\",\"ref\":\"main\",\"target_id\":\"gsnake-specs-test\"}\n];\n\n// Apply selected_targets filter if provided\nlet targets = full_matrix;\nif (selected_targets && Array.isArray(selected_targets) && selected_targets.length > 0) {\n  targets = full_matrix.filter(t => selected_targets.includes(t.target_id));\n}\n\n// Store suite metadata and started_at timestamp\nconst started_at = new Date().toISOString();\nconst total_targets = targets.length;\n\nconsole.log(`Built target matrix with ${total_targets} targets`);\nconsole.log('Targets:', targets.map(t => t.target_id).join(', '));\n\n// Output each target as a separate item with suite metadata attached\nreturn targets.map(target => ({\n  json: {\n    ...target,\n    ref: default_ref,\n    timeout_seconds,\n    poll_interval_seconds,\n    request_id: `multi-ci-${started_at}-${target.target_id}`,\n    // Suite metadata for aggregation\n    _suite_started_at: started_at,\n    _suite_total_targets: total_targets,\n    _suite_fail_fast: fail_fast\n  }\n}));"
       },
       "id": "build-target-matrix",
       "name": "Build Target Matrix",
@@ -153,7 +153,7 @@
       "typeVersion": 1.2,
       "position": [
         256,
-        504
+        512
       ]
     },
     {
@@ -298,9 +298,9 @@
   "staticData": null,
   "meta": null,
   "pinData": {},
-  "versionId": "63c1396e-5996-420e-bd93-91a37cbefbc8",
+  "versionId": "77c35057-cbfc-4d4a-b824-d8be3b399892",
   "activeVersionId": null,
-  "versionCounter": 15,
+  "versionCounter": 29,
   "triggerCount": 0,
   "tags": [],
   "shared": [

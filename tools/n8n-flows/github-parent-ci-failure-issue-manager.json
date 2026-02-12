@@ -1,5 +1,11 @@
 {
+  "updatedAt": "2026-02-12T16:18:36.610Z",
+  "createdAt": "2026-02-12T14:26:00.392Z",
+  "id": "github-parent-ci-failure-issue-manager",
   "name": "Manage Parent Repo CI Failure Issue",
+  "description": null,
+  "active": false,
+  "isArchived": false,
   "nodes": [
     {
       "parameters": {},
@@ -7,51 +13,36 @@
       "name": "Execute Workflow Trigger",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1,
-      "position": [250, 300]
+      "position": [
+        256,
+        304
+      ]
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
         "jsCode": "// Validate input and compute has_failures\nconst input = $input.first().json;\n\n// Validate required fields\nif (!input.summary || !input.results) {\n  throw new Error('INVALID_INPUT: Missing summary or results field');\n}\n\nconst { summary, results, overall_success } = input;\n\n// Compute has_failures (defensive logic)\nconst has_failures = \n  (summary.failed > 0) ||\n  (summary.errors > 0) ||\n  (overall_success === false) ||\n  results.some(r => r.status !== 'completed' || r.ci_success !== true);\n\n// Split runs into successful and unsuccessful\nconst successful_runs = results\n  .filter(r => r.status === 'completed' && r.ci_success === true)\n  .map(r => ({\n    target_id: r.target_id,\n    run_url: r.run_url\n  }));\n\nconst unsuccessful_runs = results\n  .filter(r => r.status !== 'completed' || r.ci_success !== true)\n  .map(r => ({\n    target_id: r.target_id,\n    status: r.status,\n    conclusion: r.conclusion || null,\n    error_code: r.error_code || null,\n    run_url: r.run_url || null\n  }));\n\nconsole.log('Input validated:', {\n  has_failures,\n  successful_count: successful_runs.length,\n  unsuccessful_count: unsuccessful_runs.length\n});\n\nreturn [{\n  json: {\n    ...input,\n    has_failures,\n    successful_runs,\n    unsuccessful_runs\n  }\n}];"
       },
       "id": "validate-and-classify",
       "name": "Validate And Classify Suite Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [450, 300]
+      "position": [
+        464,
+        304
+      ]
     },
     {
       "parameters": {
-        "resource": "issue",
-        "operation": "getRepositoryIssues",
-        "owner": "nntin",
-        "repository": "gsnake",
-        "filters": {
-          "state": "open"
-        }
-      },
-      "id": "get-issues",
-      "name": "Get Issues Of Repository",
-      "type": "n8n-nodes-base.github",
-      "typeVersion": 1,
-      "position": [650, 300],
-      "credentials": {
-        "githubApi": {
-          "id": "github_actions_token",
-          "name": "GitHub Actions Token"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Find tracking issue with exact title match\nconst TRACKING_TITLE = '[n8n] Automated Tests: Failure detected';\n\nconst allItems = $input.all();\nconst issues = allItems.slice(1); // Skip first item (validated input)\nconst validatedData = allItems[0].json;\n\n// Find matching open issue\nconst matchingIssues = issues\n  .map(item => item.json)\n  .filter(issue => issue.title === TRACKING_TITLE)\n  .sort((a, b) => a.number - b.number); // Sort by number (oldest first)\n\nconst openIssue = matchingIssues.length > 0 ? matchingIssues[0] : null;\nconst open_issue_exists = openIssue !== null;\n\nconsole.log('Issue lookup result:', {\n  open_issue_exists,\n  issue_number: openIssue?.number || null,\n  has_failures: validatedData.has_failures\n});\n\nreturn [{\n  json: {\n    ...validatedData,\n    open_issue_exists,\n    open_issue: openIssue\n  }\n}];"
+        "jsCode": "// Find tracking issue with exact title match\nconst TRACKING_TITLE = '[n8n] Automated Tests: Failure detected';\n\n// Pull validated workflow summary directly from the source node.\nconst validatedData = $('Validate And Classify Suite Result').first().json;\n\n// Current input items are repository issues returned by GitHub node.\n// With alwaysOutputData enabled, this list may include a placeholder item when no issues exist.\nconst issues = $input\n  .all()\n  .map(item => item.json)\n  .filter(issue => typeof issue.title === 'string' && typeof issue.number === 'number');\n\n// Find matching open issue\nconst matchingIssues = issues\n  .filter(issue => issue.title.trim() === TRACKING_TITLE)\n  .sort((a, b) => a.number - b.number); // Sort by number (oldest first)\n\nconst openIssue = matchingIssues.length > 0 ? matchingIssues[0] : null;\nconst open_issue_exists = openIssue !== null;\n\nconsole.log('Issue lookup result:', {\n  open_issue_exists,\n  issue_number: openIssue?.number || null,\n  open_issues_count: issues.length,\n  has_failures: validatedData.has_failures\n});\n\nreturn [{\n  json: {\n    ...validatedData,\n    open_issue_exists,\n    open_issue: openIssue\n  }\n}];"
       },
       "id": "find-matching-issue",
       "name": "Find Matching Open Tracking Issue",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [850, 300]
+      "position": [
+        864,
+        304
+      ]
     },
     {
       "parameters": {
@@ -185,44 +176,52 @@
       "name": "Decide Action",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
-      "position": [1050, 300]
+      "position": [
+        1056,
+        304
+      ]
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
         "jsCode": "// Build failure comment for existing open issue\nconst data = $input.first().json;\nconst { summary, successful_runs, unsuccessful_runs } = data;\n\nconst successList = successful_runs\n  .map(r => `- ✅ [${r.target_id}](${r.run_url})`)\n  .join('\\n');\n\nconst failureList = unsuccessful_runs\n  .map(r => {\n    const status = r.conclusion || r.error_code || r.status;\n    const url = r.run_url ? `[${r.target_id}](${r.run_url})` : r.target_id;\n    return `- ❌ ${url} - ${status}`;\n  })\n  .join('\\n');\n\nconst body = `## CI Failure Detected\\n\\n**Summary**: ${summary.failed + summary.errors} of ${summary.total} workflows failed\\n\\n### Failed Workflows\\n${failureList}\\n\\n### Successful Workflows\\n${successList}\\n\\n---\\n*Updated: ${new Date().toISOString()}*`;\n\nreturn [{\n  json: {\n    ...data,\n    comment_body: body\n  }\n}];"
       },
       "id": "build-failure-comment",
       "name": "Build Failure Comment",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1250, 100]
+      "position": [
+        1264,
+        112
+      ]
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
         "jsCode": "// Build recovery comment\nconst data = $input.first().json;\nconst { summary, successful_runs } = data;\n\nconst successList = successful_runs\n  .map(r => `- ✅ [${r.target_id}](${r.run_url})`)\n  .join('\\n');\n\nconst body = `## ✅ CI Recovery Detected\\n\\n**All workflows are now passing!** (${summary.passed}/${summary.total} successful)\\n\\n### Successful Workflows\\n${successList}\\n\\n---\\n*Closing this issue. A new one will be created if failures occur again.*\\n*Updated: ${new Date().toISOString()}*`;\n\nreturn [{\n  json: {\n    ...data,\n    comment_body: body\n  }\n}];"
       },
       "id": "build-recovery-comment",
       "name": "Build Recovery Comment",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1250, 300]
+      "position": [
+        1264,
+        304
+      ]
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
         "jsCode": "// Build new issue body\nconst data = $input.first().json;\nconst { summary, successful_runs, unsuccessful_runs } = data;\n\nconst successList = successful_runs.length > 0\n  ? successful_runs.map(r => `- ✅ [${r.target_id}](${r.run_url})`).join('\\n')\n  : '*None*';\n\nconst failureList = unsuccessful_runs\n  .map(r => {\n    const status = r.conclusion || r.error_code || r.status;\n    const url = r.run_url ? `[${r.target_id}](${r.run_url})` : r.target_id;\n    return `- ❌ ${url} - ${status}`;\n  })\n  .join('\\n');\n\nconst body = `## CI Failure Detected\\n\\n**Summary**: ${summary.failed + summary.errors} of ${summary.total} workflows failed\\n\\n### Failed Workflows\\n${failureList}\\n\\n### Successful Workflows\\n${successList}\\n\\n---\\n*This issue was automatically created by the n8n CI monitoring workflow.*\\n*It will be automatically closed when all CI runs pass.*\\n*Created: ${new Date().toISOString()}*`;\n\nreturn [{\n  json: {\n    ...data,\n    issue_title: '[n8n] Automated Tests: Failure detected',\n    issue_body: body\n  }\n}];"
       },
       "id": "build-new-issue-body",
       "name": "Build New Issue Body",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1250, 500]
+      "position": [
+        1264,
+        512
+      ]
     },
     {
       "parameters": {
-        "resource": "issue",
         "operation": "createComment",
         "owner": "nntin",
         "repository": "gsnake",
@@ -233,17 +232,20 @@
       "name": "Comment On Existing Issue",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [1450, 100],
+      "position": [
+        1456,
+        112
+      ],
+      "webhookId": "983caac5-36c4-458a-9b2e-99181cfa95c9",
       "credentials": {
         "githubApi": {
-          "id": "github_actions_token",
+          "id": "ePjOPmLeTHqya6KA",
           "name": "GitHub Actions Token"
         }
       }
     },
     {
       "parameters": {
-        "resource": "issue",
         "operation": "createComment",
         "owner": "nntin",
         "repository": "gsnake",
@@ -254,42 +256,49 @@
       "name": "Comment Recovery",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [1450, 300],
+      "position": [
+        1456,
+        304
+      ],
+      "webhookId": "f12f3857-f337-40c7-a58f-ec8d74b9f27b",
       "credentials": {
         "githubApi": {
-          "id": "github_actions_token",
+          "id": "ePjOPmLeTHqya6KA",
           "name": "GitHub Actions Token"
         }
       }
     },
     {
       "parameters": {
-        "resource": "issue",
-        "operation": "create",
         "owner": "nntin",
         "repository": "gsnake",
         "title": "={{ $json.issue_title }}",
-        "body": "={{ $json.issue_body }}"
+        "body": "={{ $json.issue_body }}",
+        "labels": [],
+        "assignees": []
       },
       "id": "create-new-issue",
       "name": "Create New Issue",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [1450, 500],
+      "position": [
+        1456,
+        512
+      ],
+      "webhookId": "c24f764d-559e-4e56-9282-98bdfdd4ea49",
       "credentials": {
         "githubApi": {
-          "id": "github_actions_token",
+          "id": "ePjOPmLeTHqya6KA",
           "name": "GitHub Actions Token"
         }
       }
     },
     {
       "parameters": {
-        "resource": "issue",
         "operation": "edit",
         "owner": "nntin",
         "repository": "gsnake",
-        "issueNumber": "={{ $json.open_issue.number }}",
+        "issueNumber": "={{ $json.issue_number }}",
         "editFields": {
           "state": "closed"
         }
@@ -298,57 +307,113 @@
       "name": "Close Issue",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [1650, 300],
+      "position": [
+        1872,
+        304
+      ],
+      "webhookId": "90b0eff3-ca8f-4271-b8e2-bb3e3dfde542",
       "credentials": {
         "githubApi": {
-          "id": "github_actions_token",
+          "id": "ePjOPmLeTHqya6KA",
           "name": "GitHub Actions Token"
         }
       }
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Return action summary for path 1: commented on existing issue\nconst data = $input.first().json;\n\nreturn [{\n  json: {\n    status: 'completed',\n    action: 'commented_existing_issue',\n    failure_detected: true,\n    issue: {\n      number: data.open_issue.number,\n      state: 'open',\n      html_url: data.open_issue.html_url\n    },\n    summary: data.summary,\n    successful_runs: data.successful_runs,\n    unsuccessful_runs: data.unsuccessful_runs\n  }\n}];"
+        "jsCode": "// Return action summary for path 1: commented on existing issue\nconst data = $input.first().json;\n\n// Extract issue number from issue_url\nconst issueNumber = data.issue_url\n  ? parseInt(data.issue_url.split('/').pop(), 10)\n  : null;\n\nreturn [{\n  json: {\n    status: 'completed',\n    action: 'commented_existing_issue',\n    failure_detected: true,\n    issue: {\n      number: issueNumber,\n      state: 'open',\n      html_url: data.html_url\n    },\n    summary: data.body,\n    successful_runs: null,\n    unsuccessful_runs: 1\n  }\n}];\n"
       },
       "id": "return-commented-existing",
       "name": "Return Commented Existing",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1650, 100]
+      "position": [
+        1664,
+        112
+      ]
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Return action summary for path 2: commented and closed issue\nconst data = $input.first().json;\n\nreturn [{\n  json: {\n    status: 'completed',\n    action: 'commented_and_closed_issue',\n    failure_detected: false,\n    issue: {\n      number: data.open_issue.number,\n      state: 'closed',\n      html_url: data.open_issue.html_url\n    },\n    summary: data.summary,\n    successful_runs: data.successful_runs,\n    unsuccessful_runs: data.unsuccessful_runs\n  }\n}];"
+        "jsCode": "// Return action summary for path 2: commented and closed issue\nconst data = $input.first().json;\n\nreturn [{\n  json: {\n    status: 'completed',\n    action: 'commented_and_closed_issue',\n    failure_detected: false,\n    issue: {\n      number: data.number,\n      state: 'closed',\n      html_url: data.html_url\n    }\n  }\n}];"
       },
       "id": "return-closed-issue",
       "name": "Return Closed Issue",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1850, 300]
+      "position": [
+        2064,
+        304
+      ]
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "// Return action summary for path 3: created new issue\nconst data = $input.first().json;\nconst createdIssue = $input.first().json;\n\nreturn [{\n  json: {\n    status: 'completed',\n    action: 'created_new_issue',\n    failure_detected: true,\n    issue: {\n      number: createdIssue.number,\n      state: 'open',\n      html_url: createdIssue.html_url\n    },\n    summary: data.summary,\n    successful_runs: data.successful_runs,\n    unsuccessful_runs: data.unsuccessful_runs\n  }\n}];"
-      },
-      "id": "return-created-issue",
-      "name": "Return Created Issue",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1650, 500]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForAllItems",
         "jsCode": "// Return action summary for path 4: no action needed\nconst data = $input.first().json;\n\nreturn [{\n  json: {\n    status: 'completed',\n    action: 'no_action',\n    failure_detected: false,\n    issue: null,\n    summary: data.summary,\n    successful_runs: data.successful_runs,\n    unsuccessful_runs: data.unsuccessful_runs\n  }\n}];"
       },
       "id": "return-no-action",
       "name": "Return No Action",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1250, 700]
+      "position": [
+        1264,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "repository",
+        "owner": {
+          "__rl": true,
+          "value": "nntin",
+          "mode": "name"
+        },
+        "repository": {
+          "__rl": true,
+          "value": "gsnake",
+          "mode": "name"
+        },
+        "getRepositoryIssuesFilters": {}
+      },
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1.1,
+      "position": [
+        656,
+        304
+      ],
+      "id": "e7db8664-8792-408f-aa77-00c29b1c7227",
+      "name": "Get issues of a repository",
+      "webhookId": "4c6e2bc3-b715-49e7-91e4-615ec666cd22",
+      "credentials": {
+        "githubApi": {
+          "id": "ePjOPmLeTHqya6KA",
+          "name": "GitHub Actions Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Return action summary for path 3: created new issue\nconst data = $input.first().json;\nconst createdIssue = $input.first().json;\n\nreturn [{\n  json: {\n    status: 'completed',\n    action: 'created_new_issue',\n    failure_detected: true,\n    issue: {\n      number: createdIssue.number,\n      state: 'open',\n      html_url: createdIssue.html_url\n    },\n    summary: data.summary,\n    successful_runs: data.successful_runs,\n    unsuccessful_runs: data.unsuccessful_runs\n  }\n}];"
+      },
+      "id": "return-created-issue",
+      "name": "Return Created Issue",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1664,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// extract issue id from issue_url, e.g. https://api.github.com/repos/NNTin/gSnake/issues/12\nconst issueUrl = $input.first().json.issue_url;\n\nconst issueNumber = issueUrl\n  ? parseInt(issueUrl.split('/').pop(), 10)\n  : null;\n\nreturn [{\n  json: {\n    issue_number: issueNumber\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1664,
+        304
+      ],
+      "id": "b849a28f-a9c0-4618-ab47-fbf5e14fd010",
+      "name": "Code in JavaScript"
     }
   ],
   "connections": {
@@ -367,18 +432,7 @@
       "main": [
         [
           {
-            "node": "Get Issues Of Repository",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get Issues Of Repository": {
-      "main": [
-        [
-          {
-            "node": "Find Matching Open Tracking Issue",
+            "node": "Get issues of a repository",
             "type": "main",
             "index": 0
           }
@@ -476,7 +530,7 @@
       "main": [
         [
           {
-            "node": "Close Issue",
+            "node": "Code in JavaScript",
             "type": "main",
             "index": 0
           }
@@ -504,17 +558,60 @@
           }
         ]
       ]
+    },
+    "Get issues of a repository": {
+      "main": [
+        [
+          {
+            "node": "Find Matching Open Tracking Issue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Close Issue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "pinData": {},
   "settings": {
     "executionOrder": "v1"
   },
   "staticData": null,
-  "tags": [],
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "33752770-100c-458c-9c69-e5fb9f753b08",
+  "activeVersionId": null,
+  "versionCounter": 50,
   "triggerCount": 0,
-  "updatedAt": "2026-02-12T00:00:00.000Z",
-  "versionId": "1",
-  "id": "github-parent-ci-failure-issue-manager",
-  "active": false
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-02-12T14:26:00.394Z",
+      "createdAt": "2026-02-12T14:26:00.394Z",
+      "role": "workflow:owner",
+      "workflowId": "github-parent-ci-failure-issue-manager",
+      "projectId": "dSnNZv7zF1AxLQD6",
+      "project": {
+        "updatedAt": "2026-01-24T12:56:35.595Z",
+        "createdAt": "2026-01-23T22:48:06.540Z",
+        "id": "dSnNZv7zF1AxLQD6",
+        "name": "Tin Nguyen <nguyen.ngoctindaniel@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "83ee6f71-c12c-418b-91c6-9096f2edc160"
+      }
+    }
+  ]
 }
