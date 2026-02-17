@@ -3,10 +3,10 @@ implementation_status: implemented
 tool_type: n8n-webhook
 tool_location: tools/n8n-flows/github-discord-notify.json
 workflow_id: github-discord-notify
-last_updated: 2026-02-08T11:10:00Z
+last_updated: 2026-02-17T01:28:57Z
 dependencies: []
 tags: ["github", "discord", "webhook", "notification", "hmac", "security"]
-notes: "✅ Fully implemented and tested. HMAC signature validation working with raw body. Environment variable access enabled via N8N_BLOCK_ENV_ACCESS_IN_NODE=false."
+notes: "✅ Fully implemented and tested. HMAC signature validation uses a workflow variable (`$vars.N8N_WEBHOOK_SECRET`) and Discord delivery uses credential-backed webhook auth (`discordWebhookApi`)."
 ---
 
 # GitHub to Discord Notification Webhook
@@ -32,11 +32,13 @@ n8n webhook endpoint that receives GitHub events (push, pull_request) and forwar
 
 ## Prerequisites
 
-**Environment Variables** (required):
+**Workflow Variables** (required):
 ```bash
-N8N_WEBHOOK_SECRET="your-github-webhook-secret"  # Shared secret for HMAC validation
-DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."  # Discord channel webhook
+N8N_WEBHOOK_SECRET="your-github-webhook-secret"  # Shared secret for HMAC validation via $vars
 ```
+
+**Credentials** (required):
+- `discordWebhookApi` credential with `webhookUri` set to target Discord webhook URL
 
 **External Dependencies**:
 - n8n instance running and accessible from GitHub (public URL or ngrok tunnel)
@@ -47,7 +49,7 @@ DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."  # Discord channel we
 **Required Permissions**:
 - n8n instance must be publicly accessible (or use ngrok for testing)
 - Write permissions to `.tmp/n8n-endpoint/github-discord/`
-- Discord webhook URL must be valid and active
+- `discordWebhookApi` credential must be configured and bound in n8n
 
 **GitHub App Setup**:
 1. Create GitHub App in repository/organization settings
@@ -67,7 +69,7 @@ DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."  # Discord channel we
 **Key Technologies**:
 - n8n Webhook node (n8n-nodes-base.webhook)
 - n8n Code node (n8n-nodes-base.code) for HMAC validation
-- n8n HTTP Request node for Discord webhook
+- n8n Discord node (n8n-nodes-base.discord) using `discordWebhookApi` credentials
 - n8n Write File node for logging
 - crypto (Node.js built-in) for HMAC-SHA256
 
@@ -365,7 +367,7 @@ PR description (first 200 chars)...
   }
 
   // Validate GitHub signature
-  const secret = $env.N8N_WEBHOOK_SECRET;
+  const secret = $vars.N8N_WEBHOOK_SECRET;
   const signature = headers['x-hub-signature-256'];
 
   if (!signature) {
@@ -373,7 +375,7 @@ PR description (first 200 chars)...
   }
 
   if (!secret) {
-    throw new Error('N8N_WEBHOOK_SECRET environment variable not set');
+    throw new Error('N8N_WEBHOOK_SECRET workflow variable not set');
   }
 
   // CRITICAL: Get raw body from binary data (webhook node stores it here when rawBody: true)
@@ -408,7 +410,7 @@ PR description (first 200 chars)...
 - **On Error**: Workflow fails, returns error to GitHub
 - **Environment Requirements**:
   - `NODE_FUNCTION_ALLOW_BUILTIN=crypto` (allow crypto module)
-  - `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` (allow $env access)
+  - Workflow variable `N8N_WEBHOOK_SECRET` is defined in n8n
 
 #### 3. Code Node: Extract Event Data (n8n-nodes-base.code)
 - **Purpose**: Parse GitHub payload and prepare data for logging and Discord
@@ -521,23 +523,14 @@ PR description (first 200 chars)...
   return { content: discordMessage };
   ```
 
-#### 6. HTTP Request Node: Send to Discord (n8n-nodes-base.httpRequest)
-- **Purpose**: POST formatted message to Discord webhook
-- **Method**: POST
-- **URL**: `{{ $env.DISCORD_WEBHOOK_URL }}`
-- **Headers**:
-  - `Content-Type: application/json`
-- **Body**:
-  ```json
-  {
-    "content": "{{ $json.content }}",
-    "username": "GitHub Bot",
-    "avatar_url": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
-  }
-  ```
-- **Options**:
-  - Timeout: 10000ms
-  - Retry on fail: false (let workflow fail)
+#### 6. Discord Node: Send to Discord (n8n-nodes-base.discord)
+- **Purpose**: Send formatted message to Discord using credential-backed webhook auth
+- **Connection Type**: `webhook`
+- **Credential**: `discordWebhookApi`
+- **Message**:
+  - `content`: `{{ $json.content }}`
+  - `options.username`: `GitHub Bot`
+  - `options.avatar_url`: `https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png`
 - **On Error**: Workflow fails (error propagates to GitHub)
 
 #### 7. Code Node: Format Response (n8n-nodes-base.code)
@@ -562,7 +555,7 @@ Webhook Trigger
 ```
 
 **Credentials Needed:**
-- None (uses environment variables)
+- `discordWebhookApi` credential with webhook URI
 
 ---
 
@@ -571,7 +564,7 @@ Webhook Trigger
 **Authentication:**
 - **HMAC Signature Validation**: Required for all non-localhost requests
   - Uses `X-Hub-Signature-256` header from GitHub
-  - Shared secret stored in `N8N_WEBHOOK_SECRET` environment variable
+  - Shared secret stored in workflow variable `N8N_WEBHOOK_SECRET`
   - SHA-256 HMAC computed over raw request body
   - Timing-safe comparison (use `crypto.timingSafeEqual` in production)
 - **Localhost Bypass**: Manual triggers from localhost skip signature validation (for testing)
@@ -580,15 +573,14 @@ Webhook Trigger
 **Authorization:**
 - GitHub App controls which repositories can send events
 - Only configured GitHub App can generate valid signatures
-- Discord webhook URL is private (not exposed in workflow JSON)
+- Discord webhook credential is private (not exposed in workflow JSON values)
 
 **Data Handling:**
 - **Sensitive data in payload**: Review GitHub events for exposed secrets (unlikely but possible)
 - **Logging**: Full payloads logged to `.tmp/` (excluded from git via `.gitignore`)
-- **Environment variables**:
-  - `N8N_WEBHOOK_SECRET` - sensitive, must match GitHub App webhook secret
-  - `DISCORD_WEBHOOK_URL` - sensitive, grants write access to Discord channel
-  - Both stored in `.env` file (git-ignored)
+- **Secret locations**:
+  - Workflow variable `N8N_WEBHOOK_SECRET` (must match GitHub App webhook secret)
+  - Credential `discordWebhookApi.webhookUri` (grants write access to Discord channel)
 - **Discord exposure**: Messages posted to Discord are visible to all channel members
 
 **Attack Surface:**
@@ -606,13 +598,12 @@ Webhook Trigger
 **Secrets Management:**
 - `N8N_WEBHOOK_SECRET`:
   - Generate: `openssl rand -hex 32`
-  - Store in `.env` and GitHub App webhook configuration
-  - Never commit to git
+  - Store as n8n workflow variable and in GitHub App webhook configuration
   - Rotate if exposed
-- `DISCORD_WEBHOOK_URL`:
+- `discordWebhookApi.webhookUri`:
   - Obtain from Discord channel settings (Integrations → Webhooks)
-  - Store in `.env`
-  - Regenerate in Discord if exposed
+  - Store in n8n credential manager as `discordWebhookApi`
+  - Regenerate in Discord and update credential if exposed
 
 ---
 
@@ -740,7 +731,7 @@ execute_workflow({
 
 **Setup:**
 1. Create GitHub App with webhook pointing to `https://n8n.labs.lair.nntin.xyz/webhook/github-discord`
-2. Set webhook secret to match `N8N_WEBHOOK_SECRET` in `.env`
+2. Set webhook secret to match workflow variable `N8N_WEBHOOK_SECRET`
 3. Subscribe to `push` and `pull_request` events
 4. Install app on test repository
 
@@ -810,24 +801,21 @@ curl -X POST https://n8n.labs.lair.nntin.xyz/webhook/github-discord \
 
 **Resolution:**
 ```bash
-# 1. Verify secret in .env matches GitHub App
-cat .env | grep N8N_WEBHOOK_SECRET
+# 1. Verify n8n workflow variable value matches GitHub App
+# (n8n UI: Settings/Variables -> N8N_WEBHOOK_SECRET)
 
 # 2. Check GitHub App webhook configuration
 # Go to GitHub App settings → Webhook → Secret
 
-# 3. Update .env if needed
-echo 'N8N_WEBHOOK_SECRET="correct-secret-here"' >> .env
+# 3. Update n8n workflow variable if needed
+# Set N8N_WEBHOOK_SECRET to the correct shared secret in n8n
 
-# 4. Restart n8n to reload environment variables
-docker restart <n8n-container-id>
-
-# 5. Re-import workflow to pick up new env
+# 4. Re-import workflow if JSON changed
 cd gsnake-n8n
 ./tools/scripts/sync-workflows.sh import
 ```
 
-**Prevention**: Never commit `.env` to git, use secure secret generation (`openssl rand -hex 32`).
+**Prevention**: Keep webhook secret in n8n variables only; use secure secret generation (`openssl rand -hex 32`).
 
 ---
 
@@ -836,7 +824,7 @@ cd gsnake-n8n
 **Symptom**: Workflow fails at "Send to Discord" node
 
 **Possible Causes:**
-1. Invalid `DISCORD_WEBHOOK_URL` (deleted, regenerated, or malformed)
+1. Invalid `discordWebhookApi.webhookUri` (deleted, regenerated, or malformed)
 2. Discord API is down
 3. Rate limit exceeded on Discord webhook
 4. Network connectivity issue
@@ -844,8 +832,8 @@ cd gsnake-n8n
 
 **Resolution:**
 ```bash
-# 1. Verify Discord webhook URL is valid
-curl -X POST $DISCORD_WEBHOOK_URL \
+# 1. Verify Discord webhook URL is valid (copy webhookUri from discordWebhookApi credential)
+curl -X POST "https://discord.com/api/webhooks/<id>/<token>" \
   -H "Content-Type: application/json" \
   -d '{"content": "Test message"}'
 
@@ -855,14 +843,11 @@ curl -X POST $DISCORD_WEBHOOK_URL \
 # Go to Discord channel → Settings → Integrations → Webhooks
 # Delete old webhook, create new one
 
-# 3. Update .env
-echo 'DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."' >> .env
-
-# 4. Restart n8n
-docker restart <n8n-container-id>
+# 3. Update n8n credential
+# n8n UI -> Credentials -> discordWebhookApi -> webhookUri
 ```
 
-**Prevention**: Store webhook URL securely, monitor Discord channel for delivery.
+**Prevention**: Store webhook URL only in n8n credentials, monitor Discord channel for delivery.
 
 ---
 
@@ -1070,8 +1055,9 @@ find .tmp/n8n-endpoint/github-discord/ -name "*.json" -mtime +30 -delete
 ### Workflow 1: Initial Setup and Testing
 
 ```bash
-# 1. Ensure environment variables are set
-cat .env | grep -E "N8N_WEBHOOK_SECRET|DISCORD_WEBHOOK_URL"
+# 1. Ensure secret configuration exists in n8n
+# - Workflow variable: N8N_WEBHOOK_SECRET
+# - Credential: discordWebhookApi (with webhookUri)
 
 # 2. Create log directory
 mkdir -p .tmp/n8n-endpoint/github-discord/
@@ -1164,21 +1150,18 @@ git commit -m "feat: improve Discord notification format"
 # 1. Generate new secret
 NEW_SECRET=$(openssl rand -hex 32)
 
-# 2. Update .env
-sed -i "s/N8N_WEBHOOK_SECRET=.*/N8N_WEBHOOK_SECRET=\"$NEW_SECRET\"/" .env
+# 2. Update n8n workflow variable
+# n8n UI -> Settings/Variables -> N8N_WEBHOOK_SECRET = $NEW_SECRET
 
 # 3. Update GitHub App webhook secret
 # Go to GitHub App settings → Webhook → Secret
 # Paste new secret
 
-# 4. Restart n8n to reload .env
-docker restart <n8n-container-id>
-
-# 5. Test webhook
+# 4. Test webhook
 # Make a push to test repository
 # Verify GitHub shows 200 OK
 
-# 6. Document rotation in changelog
+# 5. Document rotation in changelog
 echo "$(date): Rotated N8N_WEBHOOK_SECRET" >> .tmp/security-log.txt
 ```
 
@@ -1300,7 +1283,7 @@ git checkout <previous-commit> tools/n8n-flows/github-discord-notify.json
 - [ ] Support multiple Discord channels (route different events to different channels)
 - [ ] Add filtering options (e.g., only notify for main branch pushes)
 - [ ] Implement GitHub App ping event handling (return 200 OK without notification)
-- [ ] Add emoji customization (configurable via environment variables)
+- [ ] Add emoji customization (configurable via workflow variables)
 - [ ] Support Discord embeds for richer formatting (vs plain text messages)
 - [ ] Add unit tests for HMAC validation logic
 - [ ] Create test fixtures for all supported event types
@@ -1317,7 +1300,7 @@ git checkout <previous-commit> tools/n8n-flows/github-discord-notify.json
 - **Discord Webhook Documentation**: [Discord Webhooks Guide](https://discord.com/developers/docs/resources/webhook)
 - **n8n Documentation**:
   - [Webhook Node](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.webhook/)
-  - [HTTP Request Node](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.httprequest/)
+  - [Discord Node](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.discord/)
   - [Code Node](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.code/)
 - **Related SOPs**:
   - `workflows/infra/n8n-sync.md` - How to import/export this workflow
@@ -1330,8 +1313,7 @@ git checkout <previous-commit> tools/n8n-flows/github-discord-notify.json
 
 **2026-02-08 11:10 UTC**: ✅ WORKFLOW FULLY WORKING - All issues resolved
 - **CRITICAL FIX**: Updated HMAC signature validation to use raw request body from `firstItem.binary.data.data` (base64-decoded)
-- **ISSUE RESOLVED**: n8n v2.0+ blocks environment variable access in Code nodes by default
-- **SOLUTION**: Added `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` to n8n environment configuration
+- **HARDENING**: Use workflow variable `N8N_WEBHOOK_SECRET` for signature checks and `discordWebhookApi` credentials for Discord delivery
 - **TESTING**: Execution #17 completed successfully with status "success"
 - **VERIFICATION**: Full end-to-end flow tested (webhook → signature validation → Discord notification)
 - **STATUS**: Production-ready and fully functional
@@ -1340,7 +1322,7 @@ git checkout <previous-commit> tools/n8n-flows/github-discord-notify.json
 - GitHub calculates HMAC on raw request bytes, not re-stringified JSON
 - Must access `firstItem.binary.data.data` (base64) when webhook has `rawBody: true`
 - Cannot use `JSON.stringify(body)` as it produces different whitespace/ordering than original
-- Environment variables accessible in Code nodes require `N8N_BLOCK_ENV_ACCESS_IN_NODE=false`
+- Keep webhook secrets scoped to n8n workflow variables instead of broad `$env` access
 - Built-in modules require `NODE_FUNCTION_ALLOW_BUILTIN=crypto`
 
 **2026-02-07 21:10 UTC**: Workflow fully implemented and tested ✅
@@ -1363,7 +1345,7 @@ git checkout <previous-commit> tools/n8n-flows/github-discord-notify.json
 
 ## Implementation Checklist
 
-- [ ] Prerequisites met (environment variables set, Discord webhook created, GitHub App configured)
+- [ ] Prerequisites met (workflow variable + credential configured, GitHub App configured)
 - [ ] Tool created at `tools/n8n-flows/github-discord-notify.json`
 - [ ] Manual testing completed (localhost trigger works)
 - [ ] MCP testing completed (programmatic trigger works)

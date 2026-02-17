@@ -19,7 +19,7 @@ You're working inside the **WAT framework** (Workflows, Agents, Tools). This arc
 - n8n workflows in `tools/n8n-flows/` that implement the SOPs
 - Shell scripts in `tools/scripts/` for deployment and management
 - API calls, data transformations, file operations, database queries, webhook endpoints
-- Credentials and API keys are stored in `.env` and n8n credential system
+- Secrets are stored in n8n credentials (preferred) and workflow variables when Code nodes need scoped secrets
 - These tools are consistent, testable, and fast
 
 **Why this matters:** When AI tries to handle every step directly, accuracy drops fast. If each step is 90% accurate, you're down to 59% success after just five steps. By offloading execution to deterministic scripts, you stay focused on orchestration and decision-making where you excel.
@@ -77,7 +77,7 @@ tools/
   │   └── CLAUDE.md      # Documentation for n8n-flows
   └── scripts/
       └── sync-workflows.sh  # Sync script (import/export/sync n8n workflows)
-.env                     # API keys and environment variables (NEVER store secrets anywhere else)
+.env                     # local runtime config (avoid storing workflow secrets here)
 .mcp.json                # MCP server configuration (n8n-mcp connection)
 ```
 
@@ -168,11 +168,12 @@ Each markdown SOP in `workflows/` should have a corresponding implementation in 
 - After binding credentials, export to capture changes
 
 **Environment Variables:**
-- Access in workflows via `{{ $env.VARIABLE_NAME }}`
-- Must be set in n8n environment (docker-compose, .env, etc.)
-- Common pattern: Store secrets in .env, reference in n8n
+- Use `{{ $env.VARIABLE_NAME }}` for non-secret runtime config
+- Do not use broad `$env` access for workflow secrets in Code nodes
+- For secret values:
+  - Prefer n8n credentials on nodes that support credentials (for example `githubApi`, `discordWebhookApi`)
+  - Use workflow variables (`$vars.SECRET_NAME`) only when Code-node logic requires a secret and credentials are unavailable
 - **Important**: Variable names are case-sensitive
-- Example: `{{ $env.N8N_WEBHOOK_SECRET }}`
 
 **Webhook Data Structure:**
 - Webhook node wraps data under `$json.body` (not `$json` directly)
@@ -235,10 +236,11 @@ When implementing n8n workflows from SOPs:
 - Use `runOnceForAllItems` mode for Code nodes (default, most efficient)
 - Position nodes left-to-right in execution order (x: 250, 450, 650, ...)
 
-**2. Environment Variables:**
-- Always use `{{ $env.VAR_NAME }}` syntax, never hardcode secrets
-- Verify .env variable names match workflow references exactly
-- Document required env vars in SOP Prerequisites section
+**2. Secrets and Runtime Config:**
+- Never hardcode secrets
+- Use n8n credentials for secrets whenever node support exists
+- In Code nodes, prefer `$vars.SECRET_NAME` for required secrets instead of `$env`
+- Keep `.env` usage limited to local runtime configuration
 
 **3. Error Handling:**
 - Use `continueOnFail: true` for non-critical nodes (logging, notifications)

@@ -32,7 +32,7 @@ using `X-Hub-Signature-256`
 ```
 const crypto = require('crypto');
 
-const secret = $env.N8N_WEBHOOK_SECRET;
+const secret = $vars.N8N_WEBHOOK_SECRET; // n8n workflow variable
 const signature = $headers['x-hub-signature-256'];
 const rawBody = $json; // see note below
 
@@ -88,8 +88,9 @@ notification (and/or):
 - discord
 
 secrets:
-- N8N_WEBHOOK_SECRET for GitHub -> n8n webhook communication (see security)
-- GITHUB_TOKEN for n8n -> GitHub Workflow Dispatch communication
+- `N8N_WEBHOOK_SECRET` workflow variable for GitHub -> n8n webhook signature validation
+- `discordWebhookApi` credential for n8n -> Discord webhook delivery
+- `githubApi` credential for n8n -> GitHub Workflow Dispatch communication
 
 ## Credits
 
