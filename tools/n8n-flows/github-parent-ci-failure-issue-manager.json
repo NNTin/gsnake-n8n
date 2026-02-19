@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-02-12T16:18:36.610Z",
+  "updatedAt": "2026-02-19T14:40:00.422Z",
   "createdAt": "2026-02-12T14:26:00.392Z",
   "id": "github-parent-ci-failure-issue-manager",
   "name": "Manage Parent Repo CI Failure Issue",
@@ -239,8 +239,8 @@
       "webhookId": "983caac5-36c4-458a-9b2e-99181cfa95c9",
       "credentials": {
         "githubApi": {
-          "id": "ePjOPmLeTHqya6KA",
-          "name": "GitHub Actions Token"
+          "id": "0VzyFvJoR7SiiSFY",
+          "name": "GitHub nntin-bot automation account"
         }
       }
     },
@@ -263,8 +263,8 @@
       "webhookId": "f12f3857-f337-40c7-a58f-ec8d74b9f27b",
       "credentials": {
         "githubApi": {
-          "id": "ePjOPmLeTHqya6KA",
-          "name": "GitHub Actions Token"
+          "id": "0VzyFvJoR7SiiSFY",
+          "name": "GitHub nntin-bot automation account"
         }
       }
     },
@@ -288,8 +288,8 @@
       "webhookId": "c24f764d-559e-4e56-9282-98bdfdd4ea49",
       "credentials": {
         "githubApi": {
-          "id": "ePjOPmLeTHqya6KA",
-          "name": "GitHub Actions Token"
+          "id": "0VzyFvJoR7SiiSFY",
+          "name": "GitHub nntin-bot automation account"
         }
       }
     },
@@ -314,8 +314,8 @@
       "webhookId": "90b0eff3-ca8f-4271-b8e2-bb3e3dfde542",
       "credentials": {
         "githubApi": {
-          "id": "ePjOPmLeTHqya6KA",
-          "name": "GitHub Actions Token"
+          "id": "0VzyFvJoR7SiiSFY",
+          "name": "GitHub nntin-bot automation account"
         }
       }
     },
@@ -384,8 +384,8 @@
       "webhookId": "4c6e2bc3-b715-49e7-91e4-615ec666cd22",
       "credentials": {
         "githubApi": {
-          "id": "ePjOPmLeTHqya6KA",
-          "name": "GitHub Actions Token"
+          "id": "0VzyFvJoR7SiiSFY",
+          "name": "GitHub nntin-bot automation account"
         }
       }
     },
@@ -590,9 +590,9 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "33752770-100c-458c-9c69-e5fb9f753b08",
-  "activeVersionId": "33752770-100c-458c-9c69-e5fb9f753b08",
-  "versionCounter": 52,
+  "versionId": "53e95797-f6eb-4697-9fd0-bfd92a0fa709",
+  "activeVersionId": "53e95797-f6eb-4697-9fd0-bfd92a0fa709",
+  "versionCounter": 60,
   "triggerCount": 0,
   "tags": [],
   "shared": [
