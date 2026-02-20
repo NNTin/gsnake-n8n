@@ -6,6 +6,7 @@ workflow_id: "ralph-loop"
 last_updated: "2026-02-20"
 dependencies:
   - "workflows/infra/n8n-sync.md"
+  - "workflows/n8n-workflow/notify.md"
 tags: ["ralph", "ai-agent", "claude", "codex", "loop", "prd", "autonomous"]
 ---
 
@@ -59,8 +60,8 @@ Then apply: `docker compose down && docker compose up -d`
 
 This makes `host-gateway` resolve to the host machine's IP from inside the container.
 
-**n8n credentials required:**
-- `discordWebhookApi` (existing) — for start/done/error Discord notifications
+**n8n workflow dependencies:**
+- `notify` workflow must be imported and active (see `workflows/n8n-workflow/notify.md`)
 
 ---
 
@@ -75,7 +76,7 @@ This makes `host-gateway` resolve to the host machine's IP from inside the conta
 - n8n workflow: `tools/n8n-flows/ralph-loop.json`
 
 **Key Technologies**: Node.js stdlib only (no npm deps), n8n webhook trigger, HTTP Request
-nodes, Discord webhook credential
+nodes, Execute Workflow node (calls `notify`)
 
 ---
 
@@ -117,7 +118,7 @@ curl -X POST https://n8n.labs.lair.nntin.xyz/webhook/ralph-loop \
 **What it does (step-by-step):**
 1. n8n receives webhook, reads `action: "start"`
 2. n8n calls bridge `GET /status` — if `running: true`, responds and stops (no-op)
-3. n8n calls bridge `GET /prd.json` — if all `passes: true`, notifies Discord "nothing to do" and stops
+3. n8n calls bridge `GET /prd.json` — if all `passes: true`, notifies notification service "nothing to do" and stops
 4. n8n calls bridge `POST /run-ralph` with `{tool, maxIterations, callbackUrl}`
 5. Bridge checks state: if `iteration >= maxIterations`, returns `{status: "max_iterations_reached"}`
 6. Bridge spawns the AI agent CLI asynchronously, returns `{status: "started", jobId}`
@@ -277,7 +278,7 @@ On timeout (`RALPH_ITERATION_TIMEOUT` exceeded):
 
 7. **If: all done** (`n8n-nodes-base.if`)
    - Condition: `$json.remaining === 0`
-   - True → Discord "complete" → stop, False → continue
+   - True → Notification "complete" → stop, False → continue
 
 8. **HTTP: POST /run-ralph** (`n8n-nodes-base.httpRequest`)
    - URL: `http://host-gateway:8765/run-ralph`
@@ -288,33 +289,45 @@ On timeout (`RALPH_ITERATION_TIMEOUT` exceeded):
 
 9. **If: bridge rejected start** (`n8n-nodes-base.if`)
    - Condition: `$json.status !== "started"`
-   - True → Discord error notification → stop
+   - True → Notification error notification → stop
 
-10. **Discord: notifications** (`n8n-nodes-base.discord` via `discordWebhookApi`)
-    - "Ralph started: N stories remaining, tool=claude, maxIterations=20"
-    - "Iteration N done. M stories remaining."
-    - "All stories complete after N iterations!"
-    - "Max iterations (N) reached. M stories still open."
-    - "Iteration N failed (exitCode=X, timedOut=Y)."
+10. **Execute Workflow: notify** (`n8n-nodes-base.executeWorkflow`)
+    - Workflow: `notify` (see `workflows/n8n-workflow/notify.md`)
+    - `waitForWorkflow: false` (fire-and-forget — notification failure must not
+      block the loop)
+    - Payload shape: `{ title, body, level, source: "ralph", context: {...} }`
+    - One Execute Workflow node per terminal event; each sets appropriate
+      `level` and message text:
+
+    | Event | level | title example |
+    |-------|-------|---------------|
+    | already busy (no-op) | `info` | "Ralph already running" |
+    | nothing to do | `success` | "Nothing to do" |
+    | started | `info` | "Ralph started — N stories remaining" |
+    | iteration done | `info` | "Iteration N done — M remaining" |
+    | all complete | `success` | "All stories complete!" |
+    | max iterations reached | `warning` | "Max iterations (N) reached" |
+    | iteration failed | `error` | "Iteration N failed (exitCode=X)" |
+    | bridge/network error | `error` | "Ralph error" |
 
 **Node connections:**
 ```
 Webhook → Switch(action)
   "start" → GET /status → If(running?) → GET /prd.json → Code(remaining) → If(allDone?)
-               allDone → Discord(nothing-to-do)                  │
-               notDone → POST /run-ralph → If(rejected?) → Discord(started)
-  "done"  → Log → GET /prd.json → Code(remaining) → If(allDone?)
-               allDone → Discord(complete)
-               notDone → POST /run-ralph → If(rejected?)
-               timedOut/failed → Discord(error)
+               allDone → Notify(nothing-to-do)                  │
+               notDone → POST /run-ralph → If(rejected?) → Notify(started)
+  "done"  → If(success?) → GET /prd.json → Code(remaining) → If(allDone?)
+               allDone  → Notify(complete)
+               notDone  → POST /run-ralph → If(rejected?) → Notify(iteration-done)
+               failed   → Notify(iteration-failed)
 ```
 
 **State threading**: The `tool` and `maxIterations` parameters must travel across the async
 gap. Bridge echoes them back in the callback payload; n8n extracts them from `$json.body`
 on each `"done"` webhook call to pass them to the next `/run-ralph` POST.
 
-**Credentials used:**
-- `discordWebhookApi` — existing credential, reuse by name
+**Workflow dependencies:**
+- `notify` workflow must be imported and active before this workflow is used.
 
 ---
 
@@ -475,12 +488,12 @@ echo '{"running":false,"jobId":null,"iteration":0,"maxIterations":10,"startedAt"
 
 **Edge Case 3: All stories already pass when loop is started**
 - Condition: `prd.json` has all `passes: true`
-- Behavior: n8n checks PRD after status check, finds 0 remaining, sends Discord "nothing to do" and stops
+- Behavior: n8n checks PRD after status check, finds 0 remaining, sends notification "nothing to do" and stops
 - No iteration is started
 
 **Edge Case 4: Bridge returns `max_iterations_reached`**
 - Condition: `state.iteration >= state.maxIterations`
-- Behavior: n8n receives `{status: "max_iterations_reached"}`, sends Discord notification
+- Behavior: n8n receives `{status: "max_iterations_reached"}`, sends notification
   with remaining story count, stops the loop
 
 ---
@@ -495,7 +508,7 @@ echo '{"running":false,"jobId":null,"iteration":0,"maxIterations":10,"startedAt"
 - Bridge reads `scripts/ralph/CLAUDE.md` as the AI prompt
 - Bridge writes iteration logs to `scripts/ralph/archive/`
 - AI agent commits to the gSnake repo (pushing story completions)
-- n8n sends Discord notifications on each phase
+- n8n calls the `notify` workflow on each phase (which routes to Discord and future channels)
 
 **Data flow:**
 ```
@@ -508,7 +521,7 @@ Human → POST /webhook/ralph-loop (start)
   → n8n checks prd.json via GET host:8765/prd.json
   → n8n → POST host:8765/run-ralph (next iteration)
   → ... repeat until all passes:true or maxIterations
-  → n8n Discord notification
+  → n8n notification service
 ```
 
 ---
