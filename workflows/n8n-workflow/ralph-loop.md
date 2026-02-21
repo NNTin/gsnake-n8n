@@ -141,9 +141,11 @@ curl -X POST https://n8n.labs.lair.nntin.xyz/webhook/ralph \
 7. Bridge checks state: if `iteration >= maxIterations`, returns `{status: "max_iterations_reached"}`
 8. Bridge spawns the AI agent CLI asynchronously, returns `{status: "started", jobId}`
 9. n8n sends "Ralph started" info notification; execution ends — loop is now "in flight"
-10. When CLI exits, bridge POSTs to `callbackUrl` (auth gateway URL) with `{action: "done", ...}`
+10. When CLI exits, bridge POSTs to `callbackUrl` (auth gateway URL) with `{action: "done", tool, maxIterations, callbackUrl, ...}`
 11. Auth gateway validates token; forwards to ralph-loop via Execute Workflow
-12. ralph-loop reads `action: "done"`, repeats from step 3 (skipping the reset)
+12. ralph-loop reads `action: "done"` — if `success: false`, sends failure notification and stops
+13. Calls bridge `GET /status` — if `running: true`, sends "already running" info notification and stops
+14. Repeats from step 4 (skipping the reset); `tool`, `maxIterations`, and `callbackUrl` are extracted from the callback payload
 
 ### Check loop status
 
@@ -207,13 +209,15 @@ Starts one iteration asynchronously.
 { "status": "max_iterations_reached", "iteration": 20, "maxIterations": 20 }
 ```
 
-Bridge behavior on start:
-- Updates `state.maxIterations` from request body
-- Increments `state.iteration`, sets `state.running = true`, persists `callbackUrl` to state
-- Reads prompt from `$RALPH_REPO_PATH/$RALPH_CLAUDE_MD`
-- Spawns CLI (see Tool Invocation below)
-- Streams stdout+stderr to archive log at `$RALPH_ARCHIVE_DIR/iteration_N_YYYYMMDD_HHMMSS.log`
-- On exit: sets `state.running = false`, saves state, POSTs callback
+Bridge evaluation order (short-circuits on rejection):
+1. If `state.running === true` → return `already_running` (no state mutation)
+2. If `state.iteration >= maxIterations` → return `max_iterations_reached` (no state mutation)
+3. Updates `state.maxIterations` from request body
+4. Increments `state.iteration`, sets `state.running = true`, persists `callbackUrl`, `childPid`, and all counters to state
+5. Reads prompt from `$RALPH_REPO_PATH/$RALPH_CLAUDE_MD`
+6. Spawns CLI (see Tool Invocation below)
+7. Streams stdout+stderr to archive log at `$RALPH_ARCHIVE_DIR/iteration_N_YYYYMMDD_HHMMSS.log`
+8. On exit: sets `state.running = false`, saves state, POSTs callback (includes `tool`, `maxIterations`, `callbackUrl`)
 
 #### `POST /reset`
 
@@ -280,6 +284,8 @@ Bridge POSTs to `callbackUrl` with `Authorization: Bearer <RALPH_WEBHOOK_TOKEN>`
   "iteration": 3,
   "tool": "claude",
   "success": true,
+  "callbackUrl": "https://n8n.labs.lair.nntin.xyz/webhook/ralph",
+  "maxIterations": 20,
   "exitCode": 0,
   "timedOut": false,
   "aborted": false,
@@ -295,6 +301,8 @@ On timeout:
   "iteration": 3,
   "tool": "claude",
   "success": false,
+  "callbackUrl": "https://n8n.labs.lair.nntin.xyz/webhook/ralph",
+  "maxIterations": 20,
   "timedOut": true,
   "aborted": false,
   "exitCode": 124
@@ -309,6 +317,8 @@ On abort (`POST /abort`):
   "iteration": 3,
   "tool": "claude",
   "success": false,
+  "callbackUrl": "https://n8n.labs.lair.nntin.xyz/webhook/ralph",
+  "maxIterations": 20,
   "timedOut": false,
   "aborted": true,
   "exitCode": null
@@ -407,12 +417,14 @@ Execute Workflow Trigger → Switch(action)
 
   "done"  → If(success?)
                failed → Notify(iteration-failed, error) → stop  [exitCode/timedOut/aborted]
-               success → GET /prd.json → Code(remaining) → If(allDone?)
-                           allDone  → Notify(all-complete, success) → stop
-                           notDone  → POST /run-ralph → Switch(status)
-                                        "started"              → Notify(iteration-done, info) → WAIT
-                                        "max_iterations_reached" → Notify(max-hit, warning) → stop
-                                        "already_running"      → Notify(busy, info) → stop
+               success → GET /status → If(running?)
+                           running=true  → Notify(already-running, info) → stop
+                           running=false → GET /prd.json → Code(remaining) → If(allDone?)
+                                             allDone  → Notify(all-complete, success) → stop
+                                             notDone  → POST /run-ralph → Switch(status)
+                                                          "started"              → Notify(iteration-done, info) → WAIT
+                                                          "max_iterations_reached" → Notify(max-hit, warning) → stop
+                                                          "already_running"      → Notify(busy, info) → stop
                                         default                → Notify(error, error) → stop
 
   default → Notify(error, error) → stop
@@ -421,10 +433,11 @@ Execute Workflow Trigger → Switch(action)
 > **WAIT** — n8n execution ends. Bridge holds state. Bridge POSTs `{action:"done"}` callback
 > to the auth gateway when the CLI exits.
 
-**State threading**: `tool` and `maxIterations` must travel across the async gap. Bridge
-echoes them back in the callback payload; n8n extracts them from `$json` on each `"done"`
-call to pass to the next `/run-ralph` POST. The `"start"` path reads them from `$json`
-(original human input).
+**State threading**: `tool`, `maxIterations`, and `callbackUrl` must travel across the async
+gap. Bridge echoes all three back in the callback payload; n8n extracts them from `$json` on
+each `"done"` call to pass to the next `POST /run-ralph`. The `"start"` path reads `tool` and
+`maxIterations` from `$json` (original human input) and uses the hardcoded webhook URL as
+`callbackUrl`.
 
 ---
 
@@ -662,6 +675,12 @@ echo '{"running":false,"jobId":null,"iteration":0,"maxIterations":10,"startedAt"
 
 ## Changelog
 
+**2026-02-21 (rev 2)**: Added GET /status check on done path for race protection; callback
+payload now echoes `tool`, `maxIterations`, and `callbackUrl` for state threading; bridge
+evaluation order made explicit (check before increment); `childPid` added to BridgeState
+schema; systemd unit and env template added; OpenAPI and state.json.example checklist items
+checked off.
+
 **2026-02-21**: Major revision — auth delegated to ralph-loop-auth gateway; entry point
 changed to Execute Workflow Trigger; added /reset and /abort bridge endpoints; callbackUrl
 persisted to state.json; node 9 changed to Switch for proper status routing; "already
@@ -674,7 +693,7 @@ added RALPH_N8N_PATH env var for submodule path; RALPH_ITERATION_TIMEOUT unit co
 
 ## Implementation Checklist
 
-- [ ] Create `tools/scripts/ralph-bridge.openapi.yaml` (OpenAPI 3.0 spec — see file)
+- [x] Create `tools/scripts/ralph-bridge.openapi.yaml` (OpenAPI 3.0 spec — see file)
 - [ ] Create `tools/scripts/ralph-bridge.js` (Node.js ESM, stdlib only)
   - [ ] GET /status, GET /prd.json, POST /run-ralph
   - [ ] POST /reset (iteration counter reset)
@@ -682,10 +701,11 @@ added RALPH_N8N_PATH env var for submodule path; RALPH_ITERATION_TIMEOUT unit co
   - [ ] Persist `callbackUrl` and `childPid` in state.json
   - [ ] On startup: PID liveness check + orphan recovery callback
   - [ ] Callback POSTs include `Authorization: Bearer $RALPH_WEBHOOK_TOKEN` header
+  - [ ] Callback payload echoes `tool`, `maxIterations`, and `callbackUrl` for n8n state threading
   - [ ] RALPH_ITERATION_TIMEOUT in seconds × 1000 for Node.js setTimeout
   - [ ] claude uses `$RALPH_CLAUDE_MD` via `--print`; codex uses `$RALPH_CLAUDE_MD` via exec argument
 - [ ] Create `tools/scripts/ralph-bridge.service` (systemd unit with EnvironmentFile)
-- [ ] Add `tools/scripts/ralph-bridge.state.json` to `gsnake-n8n/.gitignore`
+- [x] Add `tools/scripts/ralph-bridge.state.json` to `gsnake-n8n/.gitignore`
 - [ ] Create `tools/n8n-flows/ralph-loop.json` (Execute Workflow Trigger entry)
 - [ ] Add `extra_hosts: - "host-gateway:host-gateway"` to n8n docker-compose
 - [ ] Deploy docker-compose change: `docker compose down && docker compose up -d`

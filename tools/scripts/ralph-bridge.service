@@ -1,0 +1,26 @@
+[Unit]
+Description=Ralph Bridge — HTTP proxy between n8n and host AI CLIs
+After=network.target
+Documentation=file:///home/nntin/git/gSnake/gsnake-n8n/workflows/n8n-workflow/ralph-loop.md
+
+[Service]
+Type=simple
+User=nntin
+WorkingDirectory=/home/nntin/git/gSnake
+EnvironmentFile=/home/nntin/git/gSnake/gsnake-n8n/tools/scripts/ralph-bridge.env
+ExecStart=/usr/bin/node /home/nntin/git/gSnake/gsnake-n8n/tools/scripts/ralph-bridge.js
+Restart=on-failure
+RestartSec=5
+
+# Logging — stdout/stderr go to journalctl
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ralph-bridge
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/home/nntin/git/gSnake
+
+[Install]
+WantedBy=multi-user.target

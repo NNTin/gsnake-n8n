@@ -122,10 +122,12 @@ All fields except `title` are optional but recommended.
      ```
 
 3. **Switch: channel routing** (`n8n-nodes-base.switch`)
-   - Routes to one or more channel branches.
-   - Current active outputs: `discord`
-   - Future outputs: `whatsapp`, `telegram`
-   - Default: route to `discord` if no channel match
+   - Currently **always routes to Discord** — no input field selects the channel.
+     The Switch node exists as a structural placeholder for future multi-channel routing.
+   - Current active outputs: `discord` (default/only branch)
+   - Future outputs: `whatsapp`, `telegram` (inactive placeholder branches)
+   - When future channels are added, a `channels` input field or per-`source` routing
+     table will determine which branches fire.
 
 4. **Discord: send notification** (`n8n-nodes-base.discord`)
    - Credential: `discordWebhookApi`

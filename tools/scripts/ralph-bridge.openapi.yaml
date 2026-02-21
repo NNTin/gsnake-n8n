@@ -43,6 +43,7 @@ paths:
                 startedAt: "2026-02-21T10:00:00.000Z"
                 tool: "claude"
                 callbackUrl: "https://n8n.labs.lair.nntin.xyz/webhook/ralph"
+                childPid: 48291
 
   /prd.json:
     get:
@@ -76,14 +77,17 @@ paths:
         Spawns the AI CLI asynchronously and returns immediately. When the CLI process
         exits (success, error, or timeout), the bridge POSTs a callback to `callbackUrl`.
 
-        Bridge behavior on a successful start:
-        - Updates `state.maxIterations` from the request body (in case it changed)
-        - Increments `state.iteration`, sets `state.running = true`
-        - Persists `callbackUrl`, `tool`, and all counters to `state.json`
-        - Reads prompt from `$RALPH_REPO_PATH/$RALPH_CLAUDE_MD`
-        - Spawns CLI, streams stdout+stderr to archive log
-        - On exit: sets `state.running = false`, saves state, POSTs callback to `callbackUrl`
-          with `Authorization: Bearer <RALPH_WEBHOOK_TOKEN>` header
+        Bridge evaluation order (short-circuits on rejection):
+        1. If `state.running === true` → return `already_running` (no state mutation)
+        2. If `state.iteration >= state.maxIterations` → return `max_iterations_reached` (no state mutation)
+        3. Updates `state.maxIterations` from the request body (in case it changed)
+        4. Increments `state.iteration`, sets `state.running = true`
+        5. Persists `callbackUrl`, `tool`, `childPid`, and all counters to `state.json`
+        6. Reads prompt from `$RALPH_REPO_PATH/$RALPH_CLAUDE_MD`
+        7. Spawns CLI, streams stdout+stderr to archive log
+        8. On exit: sets `state.running = false`, saves state, POSTs callback to `callbackUrl`
+           with `Authorization: Bearer <RALPH_WEBHOOK_TOKEN>` header. Callback includes
+           `tool`, `maxIterations`, and `callbackUrl` for n8n state threading.
       requestBody:
         required: true
         content:
@@ -246,6 +250,13 @@ components:
           description: |
             URL the bridge will POST to on CLI exit. Persisted to state.json so a
             restarted bridge can still send the callback for any orphaned in-flight iteration.
+        childPid:
+          type: integer
+          nullable: true
+          description: |
+            PID of the spawned CLI process. Persisted to state.json for orphan recovery —
+            on startup, bridge runs `kill -0 <childPid>` to detect dead processes and
+            POSTs a failure callback to callbackUrl if the process is gone.
 
     RunRalphRequest:
       type: object
@@ -314,7 +325,7 @@ components:
         Sent to the ralph-loop-auth webhook with `Authorization: Bearer <RALPH_WEBHOOK_TOKEN>`.
         The `action: "done"` field routes the payload through the same Switch node as human starts.
       type: object
-      required: [action, jobId, iteration, tool, success]
+      required: [action, jobId, iteration, tool, success, callbackUrl, maxIterations]
       properties:
         action:
           type: string
@@ -331,6 +342,18 @@ components:
         success:
           type: boolean
           description: true if CLI exited with code 0 and did not time out or abort
+        callbackUrl:
+          type: string
+          format: uri
+          description: |
+            Echo of the callbackUrl used for this iteration. n8n extracts this on the
+            "done" path and passes it to the next POST /run-ralph call, enabling state
+            threading across the async gap without hardcoding the URL.
+        maxIterations:
+          type: integer
+          description: |
+            Echo of the maxIterations cap for the current campaign. Threaded across
+            async hops so n8n can pass it to the next POST /run-ralph call.
         exitCode:
           type: integer
           nullable: true

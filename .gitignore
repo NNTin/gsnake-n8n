@@ -3,3 +3,4 @@
 .chunkhound/
 .tmp/
 tools/scripts/ralph-bridge.state.json
+tools/scripts/ralph-bridge.env
