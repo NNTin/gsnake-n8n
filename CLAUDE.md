@@ -108,8 +108,8 @@ Each markdown SOP in `workflows/` should have a corresponding implementation in 
 | `workflows/n8n-workflow/dispatch-github-ci-and-capture-result.md` | `tools/n8n-flows/github-ci-dispatch-result.json` | ✅ Implemented (supports workflow_path) |
 | `workflows/n8n-workflow/dispatch-multi-repo-ci-suite-and-capture-results.md` | `tools/n8n-flows/github-multi-ci-suite-parent.json` | ✅ Implemented |
 | `workflows/n8n-workflow/manage-parent-repo-ci-failure-issue.md` | `tools/n8n-flows/github-parent-ci-failure-issue-manager.json` | ✅ Implemented |
-| `workflows/n8n-workflow/notify.md` | `tools/n8n-flows/notify.json` | 🔲 Not started |
-| `workflows/n8n-workflow/ralph-loop-auth.md` | `tools/n8n-flows/ralph-loop-auth.json` | 🔲 Not started |
+| `workflows/n8n-workflow/notify.md` | `tools/n8n-flows/notify.json` | ✅ Implemented |
+| `workflows/n8n-workflow/ralph-loop-auth.md` | `tools/n8n-flows/ralph-loop-auth.json` | ✅ Implemented |
 | `workflows/n8n-workflow/ralph-loop.md` | `tools/n8n-flows/ralph-loop.json` + `tools/scripts/ralph-bridge.js` + `tools/scripts/ralph-bridge.openapi.yaml` | 🔲 Not started |
 
 **When creating new workflows:**
@@ -252,7 +252,7 @@ When implementing n8n workflows from SOPs:
 
 **4. Webhook Workflows:**
 - Set `responseMode: "onReceived"` for async processing (fire-and-forget)
-- Set `responseMode: "lastNode"` for synchronous responses
+- Set `responseMode: "responseNode"` when using `Respond to Webhook` nodes for explicit status/body control
 - Always validate webhook data early (signature, required fields)
 - Remember: webhook data is under `$json.body`, not `$json`
 
@@ -278,14 +278,29 @@ When implementing n8n workflows from SOPs:
 
 ## Browser Automation
 
-Use `agent-browser` for web automation. Run `agent-browser --help` for all commands.  
-The credential for n8n login can be found at gsnake-n8n/.env
+The n8n login credentials are in `gsnake-n8n/.env`.
 
-Core workflow:
-1. `agent-browser open <url>` - Navigate to page
-2. `agent-browser snapshot -i` - Get interactive elements with refs (@e1, @e2)
-3. `agent-browser click @e1` / `fill @e2 "text"` - Interact using refs
-4. Re-snapshot after page changes
+Core workflow with Playwright MCP:
+1. Ensure MCP server is installed and enabled.
+2. Open n8n in the browser and sign in with `.env` credentials.
+3. Navigate to workflow editor URL directly:
+   - `https://n8n.labs.lair.nntin.xyz/workflow/<workflow-id>`
+4. Verify workflow graph textually:
+   - Confirm required node names are visible in page text.
+   - Confirm publish state badge (`Published` / unpublished).
+5. For webhook test-mode verification:
+   - Open the workflow editor page.
+   - Click `Execute workflow` on the Webhook node.
+   - Call `.../webhook-test/<path>` once.
+   - Repeat `Execute workflow` before each additional test request (test webhook is one-shot).
+6. For production webhook verification:
+   - Activate/publish the workflow first.
+   - Call `.../webhook/<path>` and assert real HTTP status/body.
+
+Recommended verification pattern:
+1. Use Playwright MCP to verify UI graph and activation state.
+2. Use HTTP calls (`curl`/`fetch`) to verify status codes and payloads.
+3. Check n8n execution history for matching runs and branch behavior.
 
 ## Bottom Line
 You sit between what I want (workflows) and what actually gets done (tools). Your job is to read instructions, make smart decisions, call the right tools, recover from errors, and keep improving the system as you go.

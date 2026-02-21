@@ -1,5 +1,5 @@
 ---
-implementation_status: not_started
+implementation_status: implemented
 tool_type: "n8n-workflow"
 tool_location: "tools/n8n-flows/ralph-loop-auth.json"
 workflow_id: "ralph-loop-auth"
@@ -60,13 +60,22 @@ POST to the ralph-loop-auth webhook.
 
 **Workflow ID**: `ralph-loop-auth`
 
-**Response mode**: `lastNode` — allows returning HTTP 202 on success and 401 on failure.
+**Response mode**: `responseNode` — allows explicit `Respond to Webhook` nodes to return HTTP 202 on success and 401 on failure.
 
 ---
 
 ## Usage
 
-All Ralph traffic uses the same endpoint and authentication header:
+### Endpoint URLs
+
+- **Production endpoint** (active workflow):  
+  `POST https://n8n.labs.lair.nntin.xyz/webhook/ralph`
+- **Test endpoint** (editor test mode only):  
+  `POST https://n8n.labs.lair.nntin.xyz/webhook-test/ralph`
+  - Requires clicking **Execute workflow** in the editor before each request.
+  - Valid for one request per click.
+
+All Ralph traffic uses the production endpoint and authentication header:
 
 ```bash
 # Human-initiated start
@@ -96,18 +105,23 @@ curl -X POST https://n8n.labs.lair.nntin.xyz/webhook/ralph \
 1. **Webhook** (`n8n-nodes-base.webhook`)
    - Path: `/webhook/ralph`
    - Method: POST
-   - Response mode: `lastNode` (waits for final node to produce HTTP response)
+   - Response mode: `responseNode` (response is produced by dedicated Respond to Webhook nodes)
    - n8n-level authentication: none (token checked manually in Code node)
 
 2. **Code: validate auth** (`n8n-nodes-base.code`)
    - Extracts the `Authorization` header and compares it against the n8n Variable using
      `crypto.timingSafeEqual` to resist timing attacks.
+   - Fails closed when `RALPH_WEBHOOK_TOKEN` is unset.
    - Returns `{ valid: true, body: ... }` on success, `{ valid: false }` on failure.
    ```js
    const crypto = require('crypto');
    const headers = $input.first().json.headers;
    const authHeader = headers['authorization'] ?? '';
-   const expected = 'Bearer ' + $vars.RALPH_WEBHOOK_TOKEN;
+   const token = $vars.RALPH_WEBHOOK_TOKEN;
+   if (typeof token !== 'string' || token.length === 0) {
+     return [{ json: { valid: false, body: $input.first().json.body } }];
+   }
+   const expected = 'Bearer ' + token;
    // timingSafeEqual requires equal-length buffers; compare lengths first
    const a = Buffer.from(authHeader);
    const b = Buffer.from(expected);
@@ -122,7 +136,8 @@ curl -X POST https://n8n.labs.lair.nntin.xyz/webhook/ralph \
 
 4. **Execute Workflow: ralph-loop** (`n8n-nodes-base.executeWorkflow`)
    - Workflow: `ralph-loop`
-   - `waitForWorkflow: false` — fire-and-forget; ralph-loop is long-running and async
+   - `waitForSubWorkflow: false` — fire-and-forget; ralph-loop is long-running and async
+   - `alwaysOutputData: true` + `continueOnFail: true` so the HTTP 202 response path always continues even if sub-workflow dispatch fails
    - Input data: `$json.body` (the original request payload stripped of auth header)
 
 5. **Respond: 202 Accepted** (`n8n-nodes-base.respondToWebhook`)
@@ -197,6 +212,19 @@ curl -X POST https://n8n.labs.lair.nntin.xyz/webhook/ralph \
 # Expected: HTTP 401 { "error": "unauthorized", ... }
 ```
 
+### Test Case 3b: Test endpoint behavior (editor mode)
+```bash
+# 1) In n8n editor, open ralph-loop-auth and click "Execute workflow"
+# 2) Immediately run:
+curl -X POST https://n8n.labs.lair.nntin.xyz/webhook-test/ralph \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer wrong-token' \
+  -d '{"action":"start"}'
+# Expected: HTTP 401
+#
+# Note: webhook-test endpoint is one-shot; click Execute workflow again before each test call.
+```
+
 ### Test Case 4: Simulated bridge callback
 ```bash
 curl -X POST https://n8n.labs.lair.nntin.xyz/webhook/ralph \
@@ -213,7 +241,7 @@ curl -X POST https://n8n.labs.lair.nntin.xyz/webhook/ralph \
 
 ### Error: n8n Variable `RALPH_WEBHOOK_TOKEN` not set
 
-**Symptom:** All requests return 401 even with a correct token (comparison against empty string).
+**Symptom:** All requests return 401 even with a correct token.
 
 **Resolution:** Set the variable in n8n UI → Settings → Variables → Add Variable.
 

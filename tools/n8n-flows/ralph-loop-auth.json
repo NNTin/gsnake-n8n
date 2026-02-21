@@ -1,0 +1,213 @@
+{
+  "updatedAt": "2026-02-21T16:52:55.000Z",
+  "createdAt": "2026-02-21T16:38:10.495Z",
+  "id": "ralph-loop-auth",
+  "name": "Ralph Loop Auth",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ralph",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "ralph-webhook"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const crypto = require('crypto');\nconst headers = $input.first().json.headers;\nconst authHeader = headers['authorization'] ?? '';\nconst token = $vars.RALPH_WEBHOOK_TOKEN;\n\nif (typeof token !== 'string' || token.length === 0) {\n  return [{ json: { valid: false, body: $input.first().json.body } }];\n}\n\nconst expected = 'Bearer ' + token;\nconst a = Buffer.from(authHeader);\nconst b = Buffer.from(expected);\nconst valid = a.length === b.length && crypto.timingSafeEqual(a, b);\n\nreturn [{ json: { valid, body: $input.first().json.body } }];"
+      },
+      "id": "validate-auth",
+      "name": "Code: validate auth",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "auth-valid",
+      "name": "If: auth valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "ralph-loop",
+          "mode": "id"
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "execute-ralph-loop",
+      "name": "Execute Workflow: ralph-loop",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [
+        850,
+        220
+      ],
+      "alwaysOutputData": true,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'accepted' }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "respond-202",
+      "name": "Respond: 202 Accepted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1050,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'unauthorized', message: 'Invalid or missing bearer token.' }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "respond-401",
+      "name": "Respond: 401 Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        850,
+        380
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code: validate auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: validate auth": {
+      "main": [
+        [
+          {
+            "node": "If: auth valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: auth valid?": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow: ralph-loop",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: 401 Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Workflow: ralph-loop": {
+      "main": [
+        [
+          {
+            "node": "Respond: 202 Accepted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": null,
+  "versionId": "e37505c6-9d61-4914-b808-53ef183348d8",
+  "activeVersionId": null,
+  "versionCounter": 9,
+  "triggerCount": 1,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-02-21T16:38:10.497Z",
+      "createdAt": "2026-02-21T16:38:10.497Z",
+      "role": "workflow:owner",
+      "workflowId": "ralph-loop-auth",
+      "projectId": "dSnNZv7zF1AxLQD6",
+      "project": {
+        "updatedAt": "2026-01-24T12:56:35.595Z",
+        "createdAt": "2026-01-23T22:48:06.540Z",
+        "id": "dSnNZv7zF1AxLQD6",
+        "name": "Tin Nguyen <nguyen.ngoctindaniel@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "83ee6f71-c12c-418b-91c6-9096f2edc160"
+      }
+    }
+  ]
+}

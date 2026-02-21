@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-02-19T14:40:00.422Z",
+  "updatedAt": "2026-02-21T16:52:53.000Z",
   "createdAt": "2026-02-12T14:26:00.392Z",
   "id": "github-parent-ci-failure-issue-manager",
   "name": "Manage Parent Repo CI Failure Issue",
@@ -590,9 +590,9 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "53e95797-f6eb-4697-9fd0-bfd92a0fa709",
-  "activeVersionId": "53e95797-f6eb-4697-9fd0-bfd92a0fa709",
-  "versionCounter": 60,
+  "versionId": "38a59512-ca26-4d70-9006-4363dc1d5c55",
+  "activeVersionId": "38a59512-ca26-4d70-9006-4363dc1d5c55",
+  "versionCounter": 62,
   "triggerCount": 0,
   "tags": [],
   "shared": [

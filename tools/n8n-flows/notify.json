@@ -1,0 +1,239 @@
+{
+  "updatedAt": "2026-02-21T17:03:31.325Z",
+  "createdAt": "2026-02-21T16:38:10.491Z",
+  "id": "notify",
+  "name": "Notify",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        256,
+        208
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        256,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date().toISOString();\n\nreturn [{\n  json: {\n    title: 'Manual notify test',\n    body: `Manual trigger verification at ${now}`,\n    level: 'info',\n    source: 'manual',\n    context: {\n      trigger: 'manual',\n      timestamp: now,\n    },\n  },\n}];"
+      },
+      "id": "manual-test-payload",
+      "name": "Code: manual test payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\nconst colorMap = {\n  info:    0x5865F2,\n  success: 0x57F287,\n  warning: 0xFEE75C,\n  error:   0xED4245,\n};\n\nconst level = item.level || 'info';\nconst color = colorMap[level] || colorMap.info;\nconst title = item.title || 'Notification';\nconst body = item.body || '';\nconst channel = item.channel || 'discord';\n\nreturn [{\n  json: {\n    title,\n    body,\n    color,\n    level,\n    channel,\n    source: item.source || 'unknown',\n    context: item.context || {},\n  }\n}];"
+      },
+      "id": "format-message",
+      "name": "Code: format message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.channel }}",
+                    "rightValue": "discord",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "discord"
+            }
+          ]
+        }
+      },
+      "id": "channel-routing",
+      "name": "Switch: channel routing",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        864,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "options": {},
+        "embeds": {
+          "values": [
+            {
+              "description": "={{ $json.body }}",
+              "color": "={{ $json.color }}",
+              "title": "={{ $json.title }}"
+            }
+          ]
+        }
+      },
+      "id": "send-discord-notification",
+      "name": "Discord: send notification",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        1072,
+        304
+      ],
+      "webhookId": "123ece35-2dc0-4c6e-a778-97278452fa22",
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "PIL0VY96RnadjkKi",
+          "name": "Discord Webhook"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {},
+      "id": "done",
+      "name": "NoOp (done)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1264,
+        304
+      ]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code: format message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code: manual test payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: manual test payload": {
+      "main": [
+        [
+          {
+            "node": "Code: format message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: format message": {
+      "main": [
+        [
+          {
+            "node": "Switch: channel routing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch: channel routing": {
+      "main": [
+        [
+          {
+            "node": "Discord: send notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Discord: send notification": {
+      "main": [
+        [
+          {
+            "node": "NoOp (done)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "828db95b-2bd6-4081-9880-ca807c9d7b33",
+  "activeVersionId": null,
+  "versionCounter": 4,
+  "triggerCount": 0,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-02-21T16:38:10.493Z",
+      "createdAt": "2026-02-21T16:38:10.493Z",
+      "role": "workflow:owner",
+      "workflowId": "notify",
+      "projectId": "dSnNZv7zF1AxLQD6",
+      "project": {
+        "updatedAt": "2026-01-24T12:56:35.595Z",
+        "createdAt": "2026-01-23T22:48:06.540Z",
+        "id": "dSnNZv7zF1AxLQD6",
+        "name": "Tin Nguyen <nguyen.ngoctindaniel@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "83ee6f71-c12c-418b-91c6-9096f2edc160"
+      }
+    }
+  ]
+}

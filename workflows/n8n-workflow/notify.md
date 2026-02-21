@@ -1,9 +1,9 @@
 ---
-implementation_status: not_started
+implementation_status: implemented
 tool_type: "n8n-workflow"
 tool_location: "tools/n8n-flows/notify.json"
 workflow_id: "notify"
-last_updated: "2026-02-20"
+last_updated: "2026-02-21"
 dependencies: []
 tags: ["notification", "discord", "messaging", "fan-out"]
 ---
@@ -41,7 +41,7 @@ to change.
 
 ## Implementation Details
 
-**Tool Type**: n8n workflow (Execute Workflow trigger — internal only)
+**Tool Type**: n8n workflow (Execute Workflow trigger + Manual Trigger for testing)
 
 **Location**: `tools/n8n-flows/notify.json`
 
@@ -54,8 +54,9 @@ to change.
 
 ## Usage
 
-This workflow is never called directly via HTTP. Callers use the **Execute
-Workflow** node in n8n:
+This workflow is never called directly via HTTP.
+
+Production callers use the **Execute Workflow** node in n8n:
 
 ```
 Execute Workflow node
@@ -72,6 +73,9 @@ Execute Workflow node
 **`waitForWorkflow: false`** is the recommended setting for all callers so that a
 slow or failed notification never blocks the main workflow.
 
+Manual verification can run from the **Manual Trigger** path, which injects a
+predefined test payload and sends it through the same formatter/router/Discord path.
+
 ---
 
 ## Technical Specifications
@@ -85,6 +89,7 @@ All fields except `title` are optional but recommended.
   "title": "Short human-readable headline (required)",
   "body":  "Optional multi-line detail text",
   "level": "info | success | warning | error",
+  "channel": "discord (optional, defaults to discord)",
   "source": "ralph | ci | manual | other",
   "context": {
     "any": "caller-specific key/value pairs for debugging or rich formatting"
@@ -106,9 +111,15 @@ All fields except `title` are optional but recommended.
 **Nodes:**
 
 1. **Execute Workflow Trigger** (`n8n-nodes-base.executeWorkflowTrigger`)
-   - Receives the normalized payload from the calling workflow.
+   - Receives the normalized payload from calling workflows.
 
-2. **Code: format message** (`n8n-nodes-base.code`)
+2. **Manual Trigger** (`n8n-nodes-base.manualTrigger`)
+   - Used for one-click manual validation in n8n editor.
+
+3. **Code: manual test payload** (`n8n-nodes-base.code`)
+   - Builds a predefined payload for manual trigger runs.
+
+4. **Code: format message** (`n8n-nodes-base.code`)
    - Maps `level` → embed color.
    - Constructs the channel-agnostic message object:
      ```json
@@ -116,20 +127,22 @@ All fields except `title` are optional but recommended.
        "title": "...",
        "body": "...",
        "color": 5765298,
+       "channel": "discord",
        "source": "ralph",
        "context": {}
      }
      ```
 
-3. **Switch: channel routing** (`n8n-nodes-base.switch`)
-   - Currently **always routes to Discord** — no input field selects the channel.
-     The Switch node exists as a structural placeholder for future multi-channel routing.
-   - Current active outputs: `discord` (default/only branch)
+5. **Switch: channel routing** (`n8n-nodes-base.switch`)
+   - Routes by `channel` field (`discord` currently supported).
+   - `Code: format message` sets `channel = "discord"` when omitted, so existing
+     callers continue working without changes.
+   - Current active output: `discord`
    - Future outputs: `whatsapp`, `telegram` (inactive placeholder branches)
-   - When future channels are added, a `channels` input field or per-`source` routing
-     table will determine which branches fire.
+   - When future channels are added, additional rules can route by `channel`
+     or by per-`source` policy.
 
-4. **Discord: send notification** (`n8n-nodes-base.discord`)
+6. **Discord: send notification** (`n8n-nodes-base.discord`)
    - Credential: `discordWebhookApi`
    - Sends an embed with `title`, `description` (body), and `color`.
    - `continueOnFail: true` so a Discord outage does not propagate errors
@@ -142,8 +155,8 @@ All fields except `title` are optional but recommended.
 
 **Node connections:**
 ```
-Execute Workflow Trigger
-  → Code (format message)
+Execute Workflow Trigger → Code (format message)
+Manual Trigger → Code (manual test payload) → Code (format message)
   → Switch (channel routing)
       "discord"   → Discord node → ● done
       "whatsapp"  → (future)
