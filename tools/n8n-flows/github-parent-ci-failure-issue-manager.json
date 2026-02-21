@@ -4,7 +4,7 @@
   "id": "github-parent-ci-failure-issue-manager",
   "name": "Manage Parent Repo CI Failure Issue",
   "description": null,
-  "active": true,
+  "active": false,
   "isArchived": false,
   "nodes": [
     {
@@ -590,8 +590,8 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "38a59512-ca26-4d70-9006-4363dc1d5c55",
-  "activeVersionId": "38a59512-ca26-4d70-9006-4363dc1d5c55",
+  "versionId": "66accf98-c9b1-4d36-94cf-eb95dead48c7",
+  "activeVersionId": null,
   "versionCounter": 62,
   "triggerCount": 0,
   "tags": [],

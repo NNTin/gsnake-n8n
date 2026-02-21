@@ -1,10 +1,10 @@
 {
-  "updatedAt": "2026-02-21T16:52:55.000Z",
+  "updatedAt": "2026-02-21T19:14:41.000Z",
   "createdAt": "2026-02-21T16:38:10.495Z",
   "id": "ralph-loop-auth",
   "name": "Ralph Loop Auth",
   "description": null,
-  "active": false,
+  "active": true,
   "isArchived": false,
   "nodes": [
     {
@@ -28,7 +28,7 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "const crypto = require('crypto');\nconst headers = $input.first().json.headers;\nconst authHeader = headers['authorization'] ?? '';\nconst token = $vars.RALPH_WEBHOOK_TOKEN;\n\nif (typeof token !== 'string' || token.length === 0) {\n  return [{ json: { valid: false, body: $input.first().json.body } }];\n}\n\nconst expected = 'Bearer ' + token;\nconst a = Buffer.from(authHeader);\nconst b = Buffer.from(expected);\nconst valid = a.length === b.length && crypto.timingSafeEqual(a, b);\n\nreturn [{ json: { valid, body: $input.first().json.body } }];"
+        "jsCode": "const crypto = require('crypto');\nconst headers = $input.first().json.headers;\nconst authHeader = headers['authorization'] ?? '';\nconst token = $env.RALPH_WEBHOOK_TOKEN || $vars.RALPH_WEBHOOK_TOKEN;\n\nif (typeof token !== 'string' || token.length === 0) {\n  return [{ json: { valid: false, body: $input.first().json.body } }];\n}\n\nconst expected = 'Bearer ' + token;\nconst a = Buffer.from(authHeader);\nconst b = Buffer.from(expected);\nconst valid = a.length === b.length && crypto.timingSafeEqual(a, b);\n\nreturn [{ json: { valid, body: $input.first().json.body } }];"
       },
       "id": "validate-auth",
       "name": "Code: validate auth",
@@ -77,6 +77,35 @@
           "value": "ralph-loop",
           "mode": "id"
         },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": "={{ $json.body }}",
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "valid",
+              "displayName": "valid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "boolean",
+              "removed": true
+            },
+            {
+              "id": "body",
+              "displayName": "body",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "object",
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
         "options": {
           "waitForSubWorkflow": false
         }
@@ -84,7 +113,7 @@
       "id": "execute-ralph-loop",
       "name": "Execute Workflow: ralph-loop",
       "type": "n8n-nodes-base.executeWorkflow",
-      "typeVersion": 1.1,
+      "typeVersion": 1.2,
       "position": [
         850,
         220
@@ -186,9 +215,9 @@
   "staticData": null,
   "meta": null,
   "pinData": null,
-  "versionId": "e37505c6-9d61-4914-b808-53ef183348d8",
-  "activeVersionId": null,
-  "versionCounter": 9,
+  "versionId": "31ae1ed9-c7c3-4c6a-b77e-6595165bb114",
+  "activeVersionId": "31ae1ed9-c7c3-4c6a-b77e-6595165bb114",
+  "versionCounter": 11,
   "triggerCount": 1,
   "tags": [],
   "shared": [

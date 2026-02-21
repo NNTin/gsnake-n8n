@@ -117,7 +117,7 @@ curl -X POST https://n8n.labs.lair.nntin.xyz/webhook/ralph \
    const crypto = require('crypto');
    const headers = $input.first().json.headers;
    const authHeader = headers['authorization'] ?? '';
-   const token = $vars.RALPH_WEBHOOK_TOKEN;
+   const token = $env.RALPH_WEBHOOK_TOKEN || $vars.RALPH_WEBHOOK_TOKEN;
    if (typeof token !== 'string' || token.length === 0) {
      return [{ json: { valid: false, body: $input.first().json.body } }];
    }
@@ -138,7 +138,7 @@ curl -X POST https://n8n.labs.lair.nntin.xyz/webhook/ralph \
    - Workflow: `ralph-loop`
    - `waitForSubWorkflow: false` — fire-and-forget; ralph-loop is long-running and async
    - `alwaysOutputData: true` + `continueOnFail: true` so the HTTP 202 response path always continues even if sub-workflow dispatch fails
-   - Input data: `$json.body` (the original request payload stripped of auth header)
+   - Input data: uses Execute Workflow input mapping (`workflowInputs`) with `value = {{ $json.body }}` so the sub-workflow receives payload fields at top-level (`action`, `tool`, `maxIterations`, etc.) instead of the `{ valid, body }` wrapper.
 
 5. **Respond: 202 Accepted** (`n8n-nodes-base.respondToWebhook`)
    - HTTP status: 202
@@ -162,7 +162,8 @@ Webhook → Code(validate auth) → If(valid?)
 ## Security Considerations
 
 **Token storage:**
-- Stored in n8n Variables (UI → Settings → Variables) — not in workflow JSON or `.env`
+- Preferred: `RALPH_WEBHOOK_TOKEN` from n8n container environment (`$env.RALPH_WEBHOOK_TOKEN`)
+- Fallback: n8n Variables (`$vars.RALPH_WEBHOOK_TOKEN`) for compatibility
 - Bridge reads token from env var injected via systemd `EnvironmentFile`
 - Do not log or expose the token value in Code node `console.log()` calls
 

@@ -4,7 +4,7 @@
   "id": "github-ci-dispatch-result",
   "name": "Dispatch GitHub CI And Capture Result",
   "description": "Executes GitHub Actions CI via workflow_dispatch, waits for completion, and returns structured success/failure result",
-  "active": true,
+  "active": false,
   "isArchived": false,
   "nodes": [
     {
@@ -584,8 +584,8 @@
   "staticData": null,
   "meta": null,
   "pinData": {},
-  "versionId": "c7cbf518-db95-4945-8fc6-fc594cf4cfa1",
-  "activeVersionId": "c7cbf518-db95-4945-8fc6-fc594cf4cfa1",
+  "versionId": "66735b3e-11d4-430a-8840-abae3f366652",
+  "activeVersionId": null,
   "versionCounter": 20,
   "triggerCount": 0,
   "tags": [],
