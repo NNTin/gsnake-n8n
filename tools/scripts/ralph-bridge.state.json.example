@@ -1,0 +1,10 @@
+{
+  "running": false,
+  "jobId": null,
+  "iteration": 0,
+  "maxIterations": 10,
+  "startedAt": null,
+  "tool": null,
+  "callbackUrl": null,
+  "childPid": null
+}

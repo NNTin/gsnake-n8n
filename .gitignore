@@ -2,3 +2,4 @@
 .mcp.json
 .chunkhound/
 .tmp/
+tools/scripts/ralph-bridge.state.json

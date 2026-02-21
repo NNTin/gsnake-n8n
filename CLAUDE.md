@@ -109,7 +109,8 @@ Each markdown SOP in `workflows/` should have a corresponding implementation in 
 | `workflows/n8n-workflow/dispatch-multi-repo-ci-suite-and-capture-results.md` | `tools/n8n-flows/github-multi-ci-suite-parent.json` | ✅ Implemented |
 | `workflows/n8n-workflow/manage-parent-repo-ci-failure-issue.md` | `tools/n8n-flows/github-parent-ci-failure-issue-manager.json` | ✅ Implemented |
 | `workflows/n8n-workflow/notify.md` | `tools/n8n-flows/notify.json` | 🔲 Not started |
-| `workflows/n8n-workflow/ralph-loop.md` | `tools/n8n-flows/ralph-loop.json` + `tools/scripts/ralph-bridge.js` | 🔲 Not started |
+| `workflows/n8n-workflow/ralph-loop-auth.md` | `tools/n8n-flows/ralph-loop-auth.json` | 🔲 Not started |
+| `workflows/n8n-workflow/ralph-loop.md` | `tools/n8n-flows/ralph-loop.json` + `tools/scripts/ralph-bridge.js` + `tools/scripts/ralph-bridge.openapi.yaml` | 🔲 Not started |
 
 **When creating new workflows:**
 1. **Copy the template**: Start with `workflows/template.md` as your base

@@ -1,0 +1,389 @@
+openapi: 3.0.3
+
+info:
+  title: Ralph Bridge API
+  description: |
+    HTTP bridge between n8n and host-side AI CLI tools (claude / codex) for the
+    Ralph autonomous coding agent loop.
+
+    The bridge runs on the host machine and is reachable from the n8n Docker container
+    via `host-gateway:8765`. Endpoints are unauthenticated at the bridge level — the
+    Docker bridge network provides the access boundary. Outbound callbacks from the
+    bridge to n8n include a bearer token (`Authorization: Bearer <RALPH_WEBHOOK_TOKEN>`)
+    that the n8n auth gateway validates.
+  version: "1.0.0"
+
+servers:
+  - url: http://localhost:8765
+    description: Local (host-side development / manual testing)
+  - url: http://host-gateway:8765
+    description: From inside the n8n Docker container
+
+paths:
+
+  /status:
+    get:
+      operationId: getStatus
+      summary: Get current bridge state
+      description: |
+        Returns the persisted state including running flag, iteration counter, active job
+        metadata, and the callback URL for the current or most recent iteration.
+      responses:
+        "200":
+          description: Current bridge state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BridgeState"
+              example:
+                running: true
+                jobId: "550e8400-e29b-41d4-a716-446655440000"
+                iteration: 3
+                maxIterations: 20
+                startedAt: "2026-02-21T10:00:00.000Z"
+                tool: "claude"
+                callbackUrl: "https://n8n.labs.lair.nntin.xyz/webhook/ralph"
+
+  /prd.json:
+    get:
+      operationId: getPrd
+      summary: Get the current PRD
+      description: |
+        Reads and returns the JSON file at `$RALPH_REPO_PATH/$RALPH_PRD_JSON`.
+        n8n uses this to count remaining stories before and after each iteration.
+      responses:
+        "200":
+          description: Parsed PRD JSON
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Prd"
+        "500":
+          description: PRD file not found or unreadable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: "read_failed"
+                message: "Could not read PRD file at scripts/ralph/prd.json"
+
+  /run-ralph:
+    post:
+      operationId: runRalph
+      summary: Start one Ralph iteration
+      description: |
+        Spawns the AI CLI asynchronously and returns immediately. When the CLI process
+        exits (success, error, or timeout), the bridge POSTs a callback to `callbackUrl`.
+
+        Bridge behavior on a successful start:
+        - Updates `state.maxIterations` from the request body (in case it changed)
+        - Increments `state.iteration`, sets `state.running = true`
+        - Persists `callbackUrl`, `tool`, and all counters to `state.json`
+        - Reads prompt from `$RALPH_REPO_PATH/$RALPH_CLAUDE_MD`
+        - Spawns CLI, streams stdout+stderr to archive log
+        - On exit: sets `state.running = false`, saves state, POSTs callback to `callbackUrl`
+          with `Authorization: Bearer <RALPH_WEBHOOK_TOKEN>` header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunRalphRequest"
+            example:
+              tool: "claude"
+              callbackUrl: "https://n8n.labs.lair.nntin.xyz/webhook/ralph"
+              maxIterations: 20
+      responses:
+        "200":
+          description: Start result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunRalphResponse"
+              examples:
+                started:
+                  summary: Iteration started successfully
+                  value:
+                    status: "started"
+                    jobId: "550e8400-e29b-41d4-a716-446655440000"
+                already_running:
+                  summary: Another iteration is already in flight
+                  value:
+                    status: "already_running"
+                    jobId: "550e8400-e29b-41d4-a716-446655440000"
+                max_iterations_reached:
+                  summary: Iteration cap reached; call POST /reset to start a new campaign
+                  value:
+                    status: "max_iterations_reached"
+                    iteration: 20
+                    maxIterations: 20
+
+  /reset:
+    post:
+      operationId: resetState
+      summary: Reset iteration counter and state for a new campaign
+      description: |
+        Clears the iteration counter and all job metadata so a fresh campaign can begin.
+
+        Resets:
+        - `iteration` → 0
+        - `running` → false (enforced — returns 409 if currently running)
+        - `jobId` → null
+        - `startedAt` → null
+        - `callbackUrl` → null
+        - `tool` → null
+
+        Does NOT reset `maxIterations` (set by the next `/run-ralph` call).
+
+        n8n calls this at the beginning of every new campaign (action: "start") before
+        calling `/run-ralph`, ensuring the iteration counter starts from 0 regardless of
+        what previous campaigns accumulated.
+      responses:
+        "200":
+          description: State reset successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [reset]
+              example:
+                status: "reset"
+        "409":
+          description: Cannot reset while an iteration is running — abort first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: "conflict"
+                message: "Cannot reset while running. Call POST /abort first."
+
+  /abort:
+    post:
+      operationId: abort
+      summary: Abort the in-flight iteration
+      description: |
+        Sends SIGTERM to the spawned CLI process, waits up to 5 seconds, then sends
+        SIGKILL if the process has not exited.
+
+        After the process exits:
+        - Sets `state.running = false`, saves state
+        - POSTs callback to `callbackUrl` with `{ success: false, aborted: true }`
+
+        Returns immediately — the callback is sent asynchronously once the process exits.
+
+        If no iteration is in flight, returns `{ status: "idle" }` (idempotent, no error).
+      responses:
+        "200":
+          description: Abort initiated, or bridge was already idle
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [aborting, idle]
+                  jobId:
+                    type: string
+                    format: uuid
+                    nullable: true
+              examples:
+                aborting:
+                  summary: Abort signal sent to in-flight process
+                  value:
+                    status: "aborting"
+                    jobId: "550e8400-e29b-41d4-a716-446655440000"
+                idle:
+                  summary: Nothing was running
+                  value:
+                    status: "idle"
+                    jobId: null
+
+components:
+  schemas:
+
+    BridgeState:
+      type: object
+      required: [running, iteration, maxIterations]
+      properties:
+        running:
+          type: boolean
+          description: Whether a CLI process is currently in flight
+        jobId:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID of the active job; null when idle
+        iteration:
+          type: integer
+          minimum: 0
+          description: Number of iterations completed in the current campaign (reset to 0 by POST /reset)
+        maxIterations:
+          type: integer
+          minimum: 1
+          description: Hard cap — when iteration >= maxIterations, /run-ralph returns max_iterations_reached
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: ISO 8601 timestamp when the current iteration started; null when idle
+        tool:
+          type: string
+          enum: [claude, codex]
+          nullable: true
+          description: CLI tool used in the current or most recent iteration
+        callbackUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: |
+            URL the bridge will POST to on CLI exit. Persisted to state.json so a
+            restarted bridge can still send the callback for any orphaned in-flight iteration.
+
+    RunRalphRequest:
+      type: object
+      required: [tool, callbackUrl, maxIterations]
+      properties:
+        tool:
+          type: string
+          enum: [claude, codex]
+          description: Which CLI tool to spawn for this iteration
+        callbackUrl:
+          type: string
+          format: uri
+          description: |
+            URL the bridge POSTs to on CLI exit. Must be reachable from the host.
+            Should point to the ralph-loop-auth webhook (includes auth token validation).
+        maxIterations:
+          type: integer
+          minimum: 1
+          description: |
+            Hard cap on total iterations for this campaign. Bridge updates state.maxIterations
+            from this value. Typically constant across all iterations of one campaign.
+
+    RunRalphResponse:
+      description: |
+        Discriminated union on the `status` field. n8n must branch on all three cases:
+        `started` → continue loop; `max_iterations_reached` → notify and stop;
+        `already_running` → notify (info) and stop.
+      oneOf:
+        - description: Iteration started — bridge will POST callback on exit
+          type: object
+          required: [status, jobId]
+          properties:
+            status:
+              type: string
+              enum: [started]
+            jobId:
+              type: string
+              format: uuid
+        - description: Bridge-level concurrency guard fired; another iteration is in flight
+          type: object
+          required: [status, jobId]
+          properties:
+            status:
+              type: string
+              enum: [already_running]
+            jobId:
+              type: string
+              format: uuid
+        - description: Campaign cap reached; POST /reset to start a new campaign
+          type: object
+          required: [status, iteration, maxIterations]
+          properties:
+            status:
+              type: string
+              enum: [max_iterations_reached]
+            iteration:
+              type: integer
+            maxIterations:
+              type: integer
+      discriminator:
+        propertyName: status
+
+    CallbackPayload:
+      description: |
+        POSTed by the bridge to `callbackUrl` when the CLI process exits.
+        Sent to the ralph-loop-auth webhook with `Authorization: Bearer <RALPH_WEBHOOK_TOKEN>`.
+        The `action: "done"` field routes the payload through the same Switch node as human starts.
+      type: object
+      required: [action, jobId, iteration, tool, success]
+      properties:
+        action:
+          type: string
+          enum: [done]
+        jobId:
+          type: string
+          format: uuid
+        iteration:
+          type: integer
+          description: The iteration number that just completed
+        tool:
+          type: string
+          enum: [claude, codex]
+        success:
+          type: boolean
+          description: true if CLI exited with code 0 and did not time out or abort
+        exitCode:
+          type: integer
+          nullable: true
+          description: Raw process exit code; null if killed by signal
+        timedOut:
+          type: boolean
+          description: true if RALPH_ITERATION_TIMEOUT was exceeded
+        aborted:
+          type: boolean
+          description: true if the iteration was stopped by POST /abort
+        logFile:
+          type: string
+          description: Relative path to the archive log file (relative to RALPH_REPO_PATH)
+          example: "scripts/ralph/archive/iteration_3_20260221_100000.log"
+
+    Prd:
+      type: object
+      required: [project, userStories]
+      properties:
+        project:
+          type: string
+        description:
+          type: string
+        userStories:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserStory"
+
+    UserStory:
+      type: object
+      required: [id, title, passes, priority]
+      properties:
+        id:
+          type: string
+          example: "US-001"
+        title:
+          type: string
+        description:
+          type: string
+        passes:
+          type: boolean
+          description: true when the story has been implemented and verified
+        priority:
+          type: integer
+          minimum: 1
+
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          description: Machine-readable error code (snake_case)
+        message:
+          type: string
+          description: Human-readable description
