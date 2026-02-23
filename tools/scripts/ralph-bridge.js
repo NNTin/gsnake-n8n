@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -8,6 +8,7 @@ import https from 'node:https';
 import path from 'node:path';
 
 const PORT = Number.parseInt(process.env.RALPH_BRIDGE_PORT || '8765', 10);
+const RALPH_TMUX_SESSION = process.env.RALPH_TMUX_SESSION || 'ralph';
 const RALPH_REPO_PATH = process.env.RALPH_REPO_PATH;
 const RALPH_N8N_PATH = process.env.RALPH_N8N_PATH;
 const RALPH_PRD_JSON = process.env.RALPH_PRD_JSON;
@@ -49,6 +50,7 @@ const DEFAULT_STATE = {
   tool: null,
   callbackUrl: null,
   childPid: null,
+  tmuxWindow: null,
 };
 
 const STATE_PATH = path.join(RALPH_N8N_PATH, RALPH_STATE_FILE);
@@ -57,6 +59,7 @@ const PROMPT_PATH = path.join(RALPH_REPO_PATH, RALPH_CLAUDE_MD);
 const ARCHIVE_PATH = path.join(RALPH_REPO_PATH, RALPH_ARCHIVE_DIR);
 
 let activeChild = null;
+let activeTmuxWindow = null;
 let abortRequested = false;
 let iterationTimer = null;
 let timedOut = false;
@@ -150,6 +153,21 @@ function clearIterationTimer() {
   }
 }
 
+function ensureTmuxSession() {
+  const has = spawnSync('tmux', ['has-session', '-t', RALPH_TMUX_SESSION], { stdio: 'ignore' });
+  if (has.status !== 0) {
+    spawnSync('tmux', ['new-session', '-d', '-s', RALPH_TMUX_SESSION], { stdio: 'ignore' });
+  }
+}
+
+function killTmuxWindow(target) {
+  if (!target) return;
+  const result = spawnSync('tmux', ['kill-window', '-t', target], { stdio: 'ignore' });
+  if (result.status === 0) {
+    log(`Killed tmux window: ${target}`);
+  }
+}
+
 async function handlePostRunRalph(req, res) {
   let body;
   try {
@@ -225,74 +243,154 @@ function spawnCli(state, jobId) {
     logError(`Failed to read prompt file: ${error.message}`);
     state.running = false;
     state.childPid = null;
+    state.tmuxWindow = null;
     saveState(state);
     sendCallback(state, { success: false, exitCode: null, timedOut: false, aborted: false, logFile: null });
     return;
   }
 
-  let command;
-  let args;
-  if (state.tool === 'claude') {
-    command = 'claude';
-    args = ['--dangerously-skip-permissions', '--no-session-persistence', '--print', prompt];
-  } else {
-    command = 'codex';
-    args = ['exec', '--dangerously-bypass-approvals-and-sandbox', prompt];
-  }
-
   let logFilename;
   let logPath;
-  let logStream;
+  let exitCodeFile;
+  let scriptPath;
+  let promptFile;
   try {
     fs.mkdirSync(ARCHIVE_PATH, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, '').replace('T', '_').slice(0, 15);
     logFilename = `iteration_${state.iteration}_${timestamp}.log`;
     logPath = path.join(ARCHIVE_PATH, logFilename);
-    logStream = fs.createWriteStream(logPath, { flags: 'a' });
+    exitCodeFile = path.join(ARCHIVE_PATH, `exit_${jobId}.txt`);
+    scriptPath = path.join(ARCHIVE_PATH, `run_${jobId}.sh`);
+    promptFile = path.join(ARCHIVE_PATH, `prompt_${jobId}.txt`);
   } catch (error) {
-    logError(`Failed to initialize archive log: ${error.message}`);
+    logError(`Failed to initialize archive paths: ${error.message}`);
     state.running = false;
     state.childPid = null;
+    state.tmuxWindow = null;
     saveState(state);
     sendCallback(state, { success: false, exitCode: null, timedOut: false, aborted: false, logFile: null });
     return;
   }
 
-  log(`Spawning ${command} for iteration ${state.iteration} (job ${jobId})`);
-  log(`Archive log: ${logPath}`);
-
-  let child;
+  // Write prompt to a file so the bash wrapper can read it without shell-escaping issues.
   try {
-    child = spawn(command, args, {
-      cwd: RALPH_REPO_PATH,
-      env: { ...process.env },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
+    fs.writeFileSync(promptFile, prompt, 'utf-8');
   } catch (error) {
-    logError(`Failed to spawn ${command}: ${error.message}`);
-    logStream.end();
+    logError(`Failed to write prompt file: ${error.message}`);
     state.running = false;
     state.childPid = null;
+    state.tmuxWindow = null;
+    saveState(state);
+    sendCallback(state, { success: false, exitCode: null, timedOut: false, aborted: false, logFile: null });
+    return;
+  }
+
+  // Build the tool invocation line for the wrapper script.
+  // All file paths are single-quoted (safe as long as paths contain no single quotes).
+  const sq = (p) => `'${p}'`;
+  let toolLine;
+  if (state.tool === 'claude') {
+    toolLine = `claude --dangerously-skip-permissions --no-session-persistence --print "$PROMPT"`;
+  } else {
+    toolLine = `codex exec --dangerously-bypass-approvals-and-sandbox "$PROMPT"`;
+  }
+
+  const waitChannel = `ralph-done-${jobId}`;
+  const windowName = `iter-${state.iteration}`;
+  const tmuxTarget = `${RALPH_TMUX_SESSION}:${windowName}`;
+
+  // Wrapper script: captures tool exit code via PIPESTATUS, tees output to log,
+  // then signals the tmux wait-for channel so Node.js knows the iteration is done.
+  const scriptContent = [
+    '#!/usr/bin/env bash',
+    `PROMPT=$(< ${sq(promptFile)})`,
+    `${toolLine} 2>&1 | tee ${sq(logPath)}`,
+    `TOOL_EXIT=\${PIPESTATUS[0]}`,
+    `echo "$TOOL_EXIT" > ${sq(exitCodeFile)}`,
+    `tmux wait-for -S ${sq(waitChannel)}`,
+    '',
+  ].join('\n');
+
+  try {
+    fs.writeFileSync(scriptPath, scriptContent, { mode: 0o755 });
+  } catch (error) {
+    logError(`Failed to write runner script: ${error.message}`);
+    try { fs.unlinkSync(promptFile); } catch { /* ignore */ }
+    state.running = false;
+    state.childPid = null;
+    state.tmuxWindow = null;
+    saveState(state);
+    sendCallback(state, { success: false, exitCode: null, timedOut: false, aborted: false, logFile: null });
+    return;
+  }
+
+  // Helpers closed over the per-job file paths.
+  function readToolExitCode() {
+    try {
+      const raw = fs.readFileSync(exitCodeFile, 'utf-8').trim();
+      if (raw !== '') {
+        const parsed = Number.parseInt(raw, 10);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+    } catch { /* file not written — tool was killed before completion */ }
+    return null;
+  }
+
+  function cleanupTempFiles() {
+    for (const f of [scriptPath, promptFile, exitCodeFile]) {
+      try { fs.unlinkSync(f); } catch { /* ignore */ }
+    }
+  }
+
+  ensureTmuxSession();
+  log(`Spawning ${state.tool} in tmux window ${tmuxTarget} for iteration ${state.iteration} (job ${jobId})`);
+  log(`Archive log: ${logPath}`);
+
+  // Create a detached tmux window running the wrapper script.
+  const createResult = spawnSync(
+    'tmux',
+    ['new-window', '-d', '-t', RALPH_TMUX_SESSION, '-n', windowName, 'bash', scriptPath],
+    { stdio: 'ignore' },
+  );
+  if (createResult.error || createResult.status !== 0) {
+    logError(`Failed to create tmux window ${tmuxTarget}: ${createResult.error?.message ?? `exit ${createResult.status}`}`);
+    cleanupTempFiles();
+    state.running = false;
+    state.childPid = null;
+    state.tmuxWindow = null;
+    saveState(state);
+    sendCallback(state, { success: false, exitCode: null, timedOut: false, aborted: false, logFile: null });
+    return;
+  }
+
+  activeTmuxWindow = tmuxTarget;
+  abortRequested = false;
+  timedOut = false;
+  let errorFired = false;
+
+  // Spawn `tmux wait-for` as the tracked child. It blocks until the wrapper
+  // script signals the channel on completion.
+  let child;
+  try {
+    child = spawn('tmux', ['wait-for', waitChannel], {
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+  } catch (error) {
+    logError(`Failed to spawn tmux wait-for: ${error.message}`);
+    killTmuxWindow(tmuxTarget);
+    activeTmuxWindow = null;
+    cleanupTempFiles();
+    state.running = false;
+    state.childPid = null;
+    state.tmuxWindow = null;
     saveState(state);
     sendCallback(state, { success: false, exitCode: null, timedOut: false, aborted: false, logFile: null });
     return;
   }
 
   activeChild = child;
-  abortRequested = false;
-  timedOut = false;
-  let errorFired = false;
-  if (child.stdin) {
-    child.stdin.end();
-  }
-  if (child.stdout) {
-    child.stdout.pipe(logStream);
-  }
-  if (child.stderr) {
-    child.stderr.pipe(logStream);
-  }
-
   state.childPid = child.pid ?? null;
+  state.tmuxWindow = tmuxTarget;
   saveState(state);
 
   const timeoutSeconds = RALPH_ITERATION_TIMEOUT;
@@ -303,7 +401,7 @@ function spawnCli(state, jobId) {
     if (isChildStillRunning(activeChild)) {
       log(`Timeout reached for job ${state.jobId} after ${timeoutSeconds}s`);
       timedOut = true;
-
+      killTmuxWindow(activeTmuxWindow);
       activeChild.kill('SIGTERM');
       setTimeout(() => {
         if (isChildStillRunning(activeChild)) {
@@ -319,14 +417,17 @@ function spawnCli(state, jobId) {
       log(`Skipping close callback for job ${jobId} (spawn error already handled)`);
       return;
     }
-    log(`CLI exited: exitCode=${exitCode}, signal=${signal}, job=${jobId}`);
+    log(`tmux wait-for exited: exitCode=${exitCode}, signal=${signal}, job=${jobId}`);
     clearIterationTimer();
     const wasAborted = abortRequested;
     const wasTimedOut = timedOut;
     abortRequested = false;
     timedOut = false;
     activeChild = null;
-    logStream.end();
+    activeTmuxWindow = null;
+
+    const toolExitCode = readToolExitCode();
+    cleanupTempFiles();
 
     const currentState = loadState();
     if (currentState.jobId !== jobId) {
@@ -336,14 +437,15 @@ function spawnCli(state, jobId) {
 
     currentState.running = false;
     currentState.childPid = null;
+    currentState.tmuxWindow = null;
     saveState(currentState);
 
-    const success = !wasAborted && !wasTimedOut && exitCode === 0;
     const relativeLogFile = path.join(RALPH_ARCHIVE_DIR, logFilename);
+    const success = !wasAborted && !wasTimedOut && toolExitCode === 0;
 
     sendCallback(currentState, {
       success,
-      exitCode: wasTimedOut ? 124 : (exitCode ?? null),
+      exitCode: wasTimedOut ? 124 : (toolExitCode ?? null),
       timedOut: wasTimedOut,
       aborted: wasAborted,
       logFile: relativeLogFile,
@@ -352,12 +454,15 @@ function spawnCli(state, jobId) {
 
   child.on('error', (error) => {
     errorFired = true;
-    logError(`Failed to spawn ${command}: ${error.message}`);
+    logError(`tmux wait-for error: ${error.message}`);
     clearIterationTimer();
     abortRequested = false;
     timedOut = false;
+    const windowToKill = activeTmuxWindow;
     activeChild = null;
-    logStream.end();
+    activeTmuxWindow = null;
+    killTmuxWindow(windowToKill);
+    cleanupTempFiles();
 
     const currentState = loadState();
     if (currentState.jobId !== jobId) {
@@ -366,6 +471,7 @@ function spawnCli(state, jobId) {
 
     currentState.running = false;
     currentState.childPid = null;
+    currentState.tmuxWindow = null;
     saveState(currentState);
 
     sendCallback(currentState, {
@@ -387,12 +493,14 @@ function handlePostAbort(res) {
   }
 
   const jobId = state.jobId;
-  log(`Aborting job ${jobId} (PID ${state.childPid})`);
+  log(`Aborting job ${jobId}`);
   abortRequested = true;
 
-  if (activeChild) {
-    activeChild.kill('SIGTERM');
+  // Kill the tmux window running the tool first.
+  killTmuxWindow(activeTmuxWindow || state.tmuxWindow);
 
+  // Then stop the tmux wait-for watcher process.
+  if (activeChild) {
     const killTimer = setTimeout(() => {
       if (isChildStillRunning(activeChild)) {
         log(`SIGKILL escalation for job ${jobId}`);
@@ -403,6 +511,8 @@ function handlePostAbort(res) {
     activeChild.once('close', () => {
       clearTimeout(killTimer);
     });
+
+    activeChild.kill('SIGTERM');
   } else if (state.childPid) {
     try {
       process.kill(state.childPid, 'SIGTERM');
@@ -511,6 +621,7 @@ async function handlePostReset(req, res) {
   state.tool = null;
   state.callbackUrl = null;
   state.childPid = null;
+  state.tmuxWindow = null;
   state.running = false;
 
   saveState(state);
@@ -520,6 +631,7 @@ async function handlePostReset(req, res) {
 function resetOrphanedState(state) {
   state.running = false;
   state.childPid = null;
+  state.tmuxWindow = null;
   saveState(state);
 
   if (state.callbackUrl) {
@@ -540,6 +652,12 @@ function checkOrphanedProcess(state) {
     return;
   }
 
+  // Kill any leftover tmux window from a previous run.
+  if (state.tmuxWindow) {
+    log(`Killing orphaned tmux window: ${state.tmuxWindow}`);
+    killTmuxWindow(state.tmuxWindow);
+  }
+
   const pid = state.childPid;
   if (!pid) {
     log('State shows running=true but no childPid — resetting');
@@ -549,7 +667,7 @@ function checkOrphanedProcess(state) {
 
   try {
     process.kill(pid, 0);
-    log(`Process ${pid} is still alive — re-attaching is not supported. Killing.`);
+    log(`Monitor process ${pid} is still alive — killing`);
     try {
       process.kill(pid, 'SIGTERM');
       setTimeout(() => {
@@ -566,7 +684,7 @@ function checkOrphanedProcess(state) {
       resetOrphanedState(state);
     }, 6000);
   } catch {
-    log(`Orphaned process ${pid} is dead — sending failure callback`);
+    log(`Orphaned monitor process ${pid} is dead — sending failure callback`);
     resetOrphanedState(state);
   }
 }
