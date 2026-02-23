@@ -95,7 +95,25 @@ import_workflows() {
     log_info "Running n8n import:workflow..."
     docker exec "$CONTAINER_ID" n8n import:workflow --separate --input="$CONTAINER_TMP"
 
-    log_success "Import completed"
+    # Publish workflows that are marked active in git
+    # n8n import always leaves workflows inactive; publish:workflow activates them
+    log_info "Publishing workflows marked active in git..."
+    local activated=0
+    local skipped=0
+    for json_file in "$FLOWS_DIR"/*.json; do
+        local workflow_id is_active
+        workflow_id=$(jq -r '.id' "$json_file")
+        is_active=$(jq -r '.active' "$json_file")
+        if [ "$is_active" = "true" ]; then
+            docker exec "$CONTAINER_ID" n8n publish:workflow --id="$workflow_id"
+            log_success "Published: $workflow_id"
+            ((activated++)) || true
+        else
+            log_info "Skipped (inactive): $workflow_id"
+            ((skipped++)) || true
+        fi
+    done
+    log_success "Published $activated workflow(s), skipped $skipped"
 }
 
 # Export workflows from n8n to git
