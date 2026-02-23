@@ -1,0 +1,1604 @@
+{
+  "updatedAt": "2026-02-23T16:29:45.837Z",
+  "createdAt": "2026-02-21T20:30:00.000Z",
+  "id": "ralph-loop",
+  "name": "Ralph Loop",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        256,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "start",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "78b2c16f-00d5-4fd2-a585-ae26834c44be"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "start"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "done",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "9f1d2a8f-e943-4c41-b4e9-7827abf3e86e"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "done"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "switch-action",
+      "name": "Switch Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        464,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://host-gateway:8765/status",
+        "options": {}
+      },
+      "id": "get-status-start",
+      "name": "GET Status (start)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        656,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.running }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-running-start",
+      "name": "If: running? (start)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        864,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { title: 'Ralph already running', body: 'An iteration is already in flight. Wait for it to complete or call POST /abort.', level: 'info', source: 'ralph' } }];"
+      },
+      "id": "code-notify-start-already-running",
+      "name": "Code: notify already running (start)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "notify",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": "={{ $json }}",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "notify-start-already-running",
+      "name": "Execute Workflow: notify already running (start)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1264,
+        128
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "http://host-gateway:8765/prd.json",
+        "options": {}
+      },
+      "id": "get-prd-start",
+      "name": "GET PRD (start)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1056,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prd = $input.first().json;\nconst stories = prd.userStories || [];\nconst remaining = stories.filter((s) => s.passes === false).length;\nconst total = stories.length;\nconst nextStory = stories.find((s) => s.passes === false);\nconst triggerData = $node['Execute Workflow Trigger'].json;\nconst tool = triggerData.tool;\nconst maxIterations = triggerData.maxIterations;\n\nreturn [{\n  json: {\n    remaining,\n    total,\n    nextStory: nextStory ? { id: nextStory.id, title: nextStory.title } : null,\n    tool,\n    maxIterations,\n  },\n}];"
+      },
+      "id": "code-count-remaining-start",
+      "name": "Code Count Remaining (start)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1264,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.remaining }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-all-done-start",
+      "name": "If: all done? (start)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1456,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { title: 'Nothing to do', body: 'All stories in PRD already pass.', level: 'success', source: 'ralph' } }];"
+      },
+      "id": "code-notify-start-nothing",
+      "name": "Code: notify nothing to do (start)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1664,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "notify",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": "={{ $json }}",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "notify-start-nothing",
+      "name": "Execute Workflow: notify nothing to do (start)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1856,
+        208
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host-gateway:8765/reset",
+        "options": {}
+      },
+      "id": "post-reset-start",
+      "name": "POST Reset (start)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1664,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host-gateway:8765/run-ralph",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ tool: $node['Code Count Remaining (start)'].json.tool, callbackUrl: 'https://n8n.labs.lair.nntin.xyz/webhook/ralph', maxIterations: $node['Code Count Remaining (start)'].json.maxIterations }) }}",
+        "options": {}
+      },
+      "id": "post-run-ralph-start",
+      "name": "POST Run Ralph (start)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1856,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": ""
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "started",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "started"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": ""
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "max_iterations_reached",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "max_iterations_reached"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": ""
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "already_running",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "already_running"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "switch-run-status-start",
+      "name": "Switch: run status (start)",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        2064,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const run = $input.first().json;\nconst startData = $node['Code Count Remaining (start)'].json;\nreturn [{\n  json: {\n    title: 'Ralph started',\n    body: `Iteration 1 starting. ${startData.remaining} stories remaining. tool=${startData.tool}, maxIterations=${startData.maxIterations}`,\n    level: 'info',\n    source: 'ralph',\n    context: {\n      remaining: startData.remaining,\n      tool: startData.tool,\n      maxIterations: startData.maxIterations,\n      jobId: run.jobId || null,\n    },\n  },\n}];"
+      },
+      "id": "code-notify-start-started",
+      "name": "Code: notify started (start)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2256,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "notify",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": "={{ $json }}",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "notify-start-started",
+      "name": "Execute Workflow: notify started (start)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2464,
+        208
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn [{\n  json: {\n    title: 'Max iterations reached',\n    body: `Bridge rejected run because iteration=${data.iteration ?? 'n/a'} reached maxIterations=${data.maxIterations ?? 'n/a'}.`,\n    level: 'warning',\n    source: 'ralph',\n    context: data,\n  },\n}];"
+      },
+      "id": "code-notify-start-max",
+      "name": "Code: notify max iterations reached (start)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2256,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "notify",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": "={{ $json }}",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "notify-start-max",
+      "name": "Execute Workflow: notify max iterations reached (start)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2464,
+        288
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn [{\n  json: {\n    title: 'Ralph already running',\n    body: 'Bridge reports a process is already in flight.',\n    level: 'info',\n    source: 'ralph',\n    context: data,\n  },\n}];"
+      },
+      "id": "code-notify-start-busy",
+      "name": "Code: notify already running (bridge guard start)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2256,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "notify",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": "={{ $json }}",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "notify-start-busy",
+      "name": "Execute Workflow: notify already running (bridge guard start)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2464,
+        368
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn [{\n  json: {\n    title: 'Ralph error',\n    body: `Unexpected run status on start path: ${data.status || 'unknown'}.`,\n    level: 'error',\n    source: 'ralph',\n    context: data,\n  },\n}];"
+      },
+      "id": "code-notify-start-error",
+      "name": "Code: notify error (start run status)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2256,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "notify",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": "={{ $json }}",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "notify-start-error",
+      "name": "Execute Workflow: notify error (start run status)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2464,
+        448
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-success-done",
+      "name": "If: success? (done)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        656,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nlet title;\nlet level;\nif (data.aborted) {\n  title = `Iteration ${data.iteration} aborted`;\n  level = 'warning';\n} else if (data.timedOut) {\n  title = `Iteration ${data.iteration} timed out`;\n  level = 'error';\n} else {\n  title = `Iteration ${data.iteration} failed (exitCode=${data.exitCode})`;\n  level = 'error';\n}\n\nreturn [{\n  json: {\n    title,\n    body: `tool=${data.tool}, logFile=${data.logFile || 'n/a'}`,\n    level,\n    source: 'ralph',\n    context: data,\n  },\n}];"
+      },
+      "id": "code-notify-done-failed",
+      "name": "Code: notify iteration failed (done)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "notify",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": "={{ $json }}",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "notify-done-failed",
+      "name": "Execute Workflow: notify iteration failed (done)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1056,
+        768
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "http://host-gateway:8765/status",
+        "options": {}
+      },
+      "id": "get-status-done",
+      "name": "GET Status (done)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        864,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.running }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-running-done",
+      "name": "If: running? (done)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { title: 'Ralph already running', body: 'A new iteration is already in flight after callback processing (race guard).', level: 'info', source: 'ralph' } }];"
+      },
+      "id": "code-notify-done-already-running",
+      "name": "Code: notify already running (done)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1264,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "notify",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": "={{ $json }}",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "notify-done-already-running",
+      "name": "Execute Workflow: notify already running (done)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        1456,
+        528
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "url": "http://host-gateway:8765/prd.json",
+        "options": {}
+      },
+      "id": "get-prd-done",
+      "name": "GET PRD (done)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1264,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const prd = $input.first().json;\nconst stories = prd.userStories || [];\nconst remaining = stories.filter((s) => s.passes === false).length;\nconst triggerData = $node['Execute Workflow Trigger'].json;\nconst tool = triggerData.tool;\nconst maxIterations = triggerData.maxIterations;\nconst callbackUrl = triggerData.callbackUrl;\n\nreturn [{\n  json: {\n    remaining,\n    total: stories.length,\n    tool,\n    maxIterations,\n    callbackUrl,\n    iteration: triggerData.iteration,\n  },\n}];"
+      },
+      "id": "code-count-remaining-done",
+      "name": "Code Count Remaining (done)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1456,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.remaining }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-all-done-done",
+      "name": "If: all done? (done)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1664,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { title: 'All stories complete!', body: 'All user stories in PRD pass.', level: 'success', source: 'ralph' } }];"
+      },
+      "id": "code-notify-done-all-complete",
+      "name": "Code: notify all complete (done)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1856,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "notify",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": "={{ $json }}",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "notify-done-all-complete",
+      "name": "Execute Workflow: notify all complete (done)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2064,
+        608
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host-gateway:8765/run-ralph",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ tool: $node['Code Count Remaining (done)'].json.tool, callbackUrl: $node['Code Count Remaining (done)'].json.callbackUrl || 'https://n8n.labs.lair.nntin.xyz/webhook/ralph', maxIterations: $node['Code Count Remaining (done)'].json.maxIterations }) }}",
+        "options": {}
+      },
+      "id": "post-run-ralph-done",
+      "name": "POST Run Ralph (done)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1856,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": ""
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "started",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "started"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": ""
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "max_iterations_reached",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "max_iterations_reached"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": ""
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "already_running",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "already_running"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "switch-run-status-done",
+      "name": "Switch: run status (done)",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        2064,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const run = $input.first().json;\nconst data = $node['Code Count Remaining (done)'].json;\nreturn [{\n  json: {\n    title: `Iteration ${data.iteration} done`,\n    body: `${data.remaining} stories remaining. Starting next iteration.`,\n    level: 'info',\n    source: 'ralph',\n    context: {\n      iteration: data.iteration,\n      remaining: data.remaining,\n      tool: data.tool,\n      maxIterations: data.maxIterations,\n      jobId: run.jobId || null,\n    },\n  },\n}];"
+      },
+      "id": "code-notify-done-iteration-done",
+      "name": "Code: notify iteration done (done)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2256,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "notify",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": "={{ $json }}",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "notify-done-iteration-done",
+      "name": "Execute Workflow: notify iteration done (done)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2464,
+        608
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn [{\n  json: {\n    title: `Max iterations (${data.maxIterations ?? 'n/a'}) reached`,\n    body: `Bridge rejected next run at iteration=${data.iteration ?? 'n/a'}.`,\n    level: 'warning',\n    source: 'ralph',\n    context: data,\n  },\n}];"
+      },
+      "id": "code-notify-done-max",
+      "name": "Code: notify max iterations reached (done)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2256,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "notify",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": "={{ $json }}",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "notify-done-max",
+      "name": "Execute Workflow: notify max iterations reached (done)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2464,
+        688
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn [{\n  json: {\n    title: 'Ralph already running',\n    body: 'Bridge reports a process is already in flight.',\n    level: 'info',\n    source: 'ralph',\n    context: data,\n  },\n}];"
+      },
+      "id": "code-notify-done-busy",
+      "name": "Code: notify already running (bridge guard done)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2256,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "notify",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": "={{ $json }}",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "notify-done-busy",
+      "name": "Execute Workflow: notify already running (bridge guard done)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2464,
+        768
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn [{\n  json: {\n    title: 'Ralph error',\n    body: `Unexpected run status on done path: ${data.status || 'unknown'}.`,\n    level: 'error',\n    source: 'ralph',\n    context: data,\n  },\n}];"
+      },
+      "id": "code-notify-done-error",
+      "name": "Code: notify error (done run status)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2256,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "notify",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": "={{ $json }}",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "notify-done-error",
+      "name": "Execute Workflow: notify error (done run status)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2464,
+        848
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn [{\n  json: {\n    title: 'Ralph error',\n    body: `Unknown action received: ${data.action || 'undefined'}.`,\n    level: 'error',\n    source: 'ralph',\n    context: data,\n  },\n}];"
+      },
+      "id": "code-notify-unknown-action",
+      "name": "Code: notify error (unknown action)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        992
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "notify",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": "={{ $json }}",
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "notify-unknown-action",
+      "name": "Execute Workflow: notify error (unknown action)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        864,
+        992
+      ],
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Switch Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Action": {
+      "main": [
+        [
+          {
+            "node": "GET Status (start)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If: success? (done)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: notify error (unknown action)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Status (start)": {
+      "main": [
+        [
+          {
+            "node": "If: running? (start)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: running? (start)": {
+      "main": [
+        [
+          {
+            "node": "Code: notify already running (start)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GET PRD (start)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: notify already running (start)": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow: notify already running (start)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET PRD (start)": {
+      "main": [
+        [
+          {
+            "node": "Code Count Remaining (start)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Count Remaining (start)": {
+      "main": [
+        [
+          {
+            "node": "If: all done? (start)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: all done? (start)": {
+      "main": [
+        [
+          {
+            "node": "Code: notify nothing to do (start)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "POST Reset (start)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: notify nothing to do (start)": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow: notify nothing to do (start)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST Reset (start)": {
+      "main": [
+        [
+          {
+            "node": "POST Run Ralph (start)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST Run Ralph (start)": {
+      "main": [
+        [
+          {
+            "node": "Switch: run status (start)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch: run status (start)": {
+      "main": [
+        [
+          {
+            "node": "Code: notify started (start)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: notify max iterations reached (start)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: notify already running (bridge guard start)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: notify error (start run status)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: notify started (start)": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow: notify started (start)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: notify max iterations reached (start)": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow: notify max iterations reached (start)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: notify already running (bridge guard start)": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow: notify already running (bridge guard start)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: notify error (start run status)": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow: notify error (start run status)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: success? (done)": {
+      "main": [
+        [
+          {
+            "node": "GET Status (done)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: notify iteration failed (done)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: notify iteration failed (done)": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow: notify iteration failed (done)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Status (done)": {
+      "main": [
+        [
+          {
+            "node": "If: running? (done)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: running? (done)": {
+      "main": [
+        [
+          {
+            "node": "Code: notify already running (done)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GET PRD (done)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: notify already running (done)": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow: notify already running (done)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET PRD (done)": {
+      "main": [
+        [
+          {
+            "node": "Code Count Remaining (done)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Count Remaining (done)": {
+      "main": [
+        [
+          {
+            "node": "If: all done? (done)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: all done? (done)": {
+      "main": [
+        [
+          {
+            "node": "Code: notify all complete (done)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "POST Run Ralph (done)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: notify all complete (done)": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow: notify all complete (done)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST Run Ralph (done)": {
+      "main": [
+        [
+          {
+            "node": "Switch: run status (done)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch: run status (done)": {
+      "main": [
+        [
+          {
+            "node": "Code: notify iteration done (done)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: notify max iterations reached (done)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: notify already running (bridge guard done)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: notify error (done run status)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: notify iteration done (done)": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow: notify iteration done (done)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: notify max iterations reached (done)": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow: notify max iterations reached (done)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: notify already running (bridge guard done)": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow: notify already running (bridge guard done)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: notify error (done run status)": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow: notify error (done run status)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: notify error (unknown action)": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow: notify error (unknown action)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "72cbb85d-247d-4c97-82d2-c44834f385c7",
+  "activeVersionId": "9ba22fec-9747-4539-a340-1116ac0fe02b",
+  "versionCounter": 8,
+  "triggerCount": 0,
+  "tags": [],
+  "shared": [
+    {
+      "updatedAt": "2026-02-21T19:35:27.581Z",
+      "createdAt": "2026-02-21T19:35:27.581Z",
+      "role": "workflow:owner",
+      "workflowId": "ralph-loop",
+      "projectId": "dSnNZv7zF1AxLQD6",
+      "project": {
+        "updatedAt": "2026-01-24T12:56:35.595Z",
+        "createdAt": "2026-01-23T22:48:06.540Z",
+        "id": "dSnNZv7zF1AxLQD6",
+        "name": "Tin Nguyen <nguyen.ngoctindaniel@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "83ee6f71-c12c-418b-91c6-9096f2edc160"
+      }
+    }
+  ]
+}

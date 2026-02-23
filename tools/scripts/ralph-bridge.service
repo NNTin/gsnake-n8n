@@ -8,7 +8,8 @@ Type=simple
 User=nntin
 WorkingDirectory=/home/nntin/git/gSnake
 EnvironmentFile=/home/nntin/git/gSnake/gsnake-n8n/tools/scripts/ralph-bridge.env
-ExecStart=/usr/bin/node /home/nntin/git/gSnake/gsnake-n8n/tools/scripts/ralph-bridge.js
+Environment=PATH=/home/nntin/.local/bin:/home/nntin/.nvm/versions/node/v20.19.6/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/nntin/.nvm/versions/node/v20.19.6/bin/node /home/nntin/git/gSnake/gsnake-n8n/tools/scripts/ralph-bridge.js
 Restart=on-failure
 RestartSec=5
 

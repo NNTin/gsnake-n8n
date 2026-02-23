@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-02-21T19:14:41.000Z",
+  "updatedAt": "2026-02-23T16:29:15.029Z",
   "createdAt": "2026-02-21T16:38:10.495Z",
   "id": "ralph-loop-auth",
   "name": "Ralph Loop Auth",
@@ -19,15 +19,13 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        250,
-        300
+        256,
+        304
       ],
       "webhookId": "ralph-webhook"
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "language": "javaScript",
         "jsCode": "const crypto = require('crypto');\nconst headers = $input.first().json.headers;\nconst authHeader = headers['authorization'] ?? '';\nconst token = $env.RALPH_WEBHOOK_TOKEN || $vars.RALPH_WEBHOOK_TOKEN;\n\nif (typeof token !== 'string' || token.length === 0) {\n  return [{ json: { valid: false, body: $input.first().json.body } }];\n}\n\nconst expected = 'Bearer ' + token;\nconst a = Buffer.from(authHeader);\nconst b = Buffer.from(expected);\nconst valid = a.length === b.length && crypto.timingSafeEqual(a, b);\n\nreturn [{ json: { valid, body: $input.first().json.body } }];"
       },
       "id": "validate-auth",
@@ -35,8 +33,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        450,
-        300
+        464,
+        304
       ]
     },
     {
@@ -66,8 +64,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        650,
-        300
+        656,
+        304
       ]
     },
     {
@@ -115,8 +113,8 @@
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.2,
       "position": [
-        850,
-        220
+        864,
+        224
       ],
       "alwaysOutputData": true,
       "continueOnFail": true
@@ -134,8 +132,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        1050,
-        220
+        1056,
+        224
       ]
     },
     {
@@ -151,8 +149,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        850,
-        380
+        864,
+        384
       ]
     }
   ],
@@ -214,10 +212,10 @@
   },
   "staticData": null,
   "meta": null,
-  "pinData": null,
-  "versionId": "31ae1ed9-c7c3-4c6a-b77e-6595165bb114",
-  "activeVersionId": "31ae1ed9-c7c3-4c6a-b77e-6595165bb114",
-  "versionCounter": 11,
+  "pinData": {},
+  "versionId": "d0e196f9-f751-4edc-9c4b-ddb36b6f0f0f",
+  "activeVersionId": "d0e196f9-f751-4edc-9c4b-ddb36b6f0f0f",
+  "versionCounter": 22,
   "triggerCount": 1,
   "tags": [],
   "shared": [

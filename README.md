@@ -92,6 +92,84 @@ secrets:
 - `discordWebhookApi` credential for n8n -> Discord webhook delivery
 - `githubApi` credential for n8n -> GitHub Workflow Dispatch communication
 
+## Ralph Bridge (host service)
+
+`tools/scripts/ralph-bridge.js` runs on the host and acts as an HTTP bridge between n8n and the AI CLI tools (`claude`, `codex`). n8n cannot invoke host binaries directly, so the bridge exposes a small REST API that n8n calls via `host-gateway`.
+
+### First-time setup
+
+1. Copy the example env file and fill in your values:
+   ```bash
+   cp tools/scripts/ralph-bridge.env.example tools/scripts/ralph-bridge.env
+   # edit RALPH_WEBHOOK_TOKEN to match the value in the n8n .env
+   ```
+
+2. Install and start the systemd service:
+   ```bash
+   sudo cp tools/scripts/ralph-bridge.service /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now ralph-bridge
+   ```
+
+3. Verify it is running:
+   ```bash
+   sudo systemctl status ralph-bridge
+   curl http://localhost:8765/status
+   ```
+
+### Managing the service
+
+```bash
+sudo systemctl start ralph-bridge
+sudo systemctl stop ralph-bridge
+sudo systemctl restart ralph-bridge
+sudo systemctl status ralph-bridge
+```
+
+### Logs
+
+```bash
+# Latest entries
+journalctl -u ralph-bridge -n 50
+
+# Follow live
+journalctl -u ralph-bridge -f
+
+# Since last boot
+journalctl -u ralph-bridge -b
+
+# Last hour
+journalctl -u ralph-bridge --since "1 hour ago"
+```
+
+### Updating after code changes
+
+The service reads `ralph-bridge.js` directly from the repo — no reinstall needed. A restart picks up any changes:
+
+```bash
+sudo systemctl restart ralph-bridge
+```
+
+If you change `ralph-bridge.service` itself, redeploy it first:
+
+```bash
+sudo cp tools/scripts/ralph-bridge.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl restart ralph-bridge
+```
+
+### Environment file
+
+`tools/scripts/ralph-bridge.env` is gitignored. The example at `tools/scripts/ralph-bridge.env.example` documents all variables. Key ones:
+
+| Variable | Description |
+|---|---|
+| `RALPH_BRIDGE_PORT` | Port the bridge listens on (default `8765`) |
+| `RALPH_REPO_PATH` | Absolute path to the gSnake repo root |
+| `RALPH_N8N_PATH` | Absolute path to the `gsnake-n8n` submodule |
+| `RALPH_WEBHOOK_TOKEN` | Bearer token — must match `RALPH_WEBHOOK_TOKEN` in the n8n `.env` |
+| `RALPH_ITERATION_TIMEOUT` | Seconds before a running CLI is killed (default `18000`) |
+
 ## Credits
 
 Credit to the WAT Framework idea goes to [Nate Herk](https://www.youtube.com/watch?v=saggDHHnmtQ)

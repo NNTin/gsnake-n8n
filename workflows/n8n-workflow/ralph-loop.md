@@ -1,5 +1,5 @@
 ---
-implementation_status: not_started
+implementation_status: implemented
 tool_type: "n8n-workflow (Execute Workflow Trigger)"
 tool_location: "tools/n8n-flows/ralph-loop.json + tools/scripts/ralph-bridge.js"
 workflow_id: "ralph-loop"
@@ -694,25 +694,25 @@ added RALPH_N8N_PATH env var for submodule path; RALPH_ITERATION_TIMEOUT unit co
 ## Implementation Checklist
 
 - [x] Create `tools/scripts/ralph-bridge.openapi.yaml` (OpenAPI 3.0 spec — see file)
-- [ ] Create `tools/scripts/ralph-bridge.js` (Node.js ESM, stdlib only)
-  - [ ] GET /status, GET /prd.json, POST /run-ralph
-  - [ ] POST /reset (iteration counter reset)
-  - [ ] POST /abort (SIGTERM → SIGKILL, async callback)
-  - [ ] Persist `callbackUrl` and `childPid` in state.json
-  - [ ] On startup: PID liveness check + orphan recovery callback
-  - [ ] Callback POSTs include `Authorization: Bearer $RALPH_WEBHOOK_TOKEN` header
-  - [ ] Callback payload echoes `tool`, `maxIterations`, and `callbackUrl` for n8n state threading
-  - [ ] RALPH_ITERATION_TIMEOUT in seconds × 1000 for Node.js setTimeout
-  - [ ] claude uses `$RALPH_CLAUDE_MD` via `--print`; codex uses `$RALPH_CLAUDE_MD` via exec argument
-- [ ] Create `tools/scripts/ralph-bridge.service` (systemd unit with EnvironmentFile)
+- [x] Create `tools/scripts/ralph-bridge.js` (Node.js ESM, stdlib only)
+  - [x] GET /status, GET /prd.json, POST /run-ralph
+  - [x] POST /reset (iteration counter reset)
+  - [x] POST /abort (SIGTERM → SIGKILL, async callback)
+  - [x] Persist `callbackUrl` and `childPid` in state.json
+  - [x] On startup: PID liveness check + orphan recovery callback
+  - [x] Callback POSTs include `Authorization: Bearer $RALPH_WEBHOOK_TOKEN` header
+  - [x] Callback payload echoes `tool`, `maxIterations`, and `callbackUrl` for n8n state threading
+  - [x] RALPH_ITERATION_TIMEOUT in seconds × 1000 for Node.js setTimeout
+  - [x] claude uses `$RALPH_CLAUDE_MD` via `--print`; codex uses `$RALPH_CLAUDE_MD` via exec argument
+- [x] Create `tools/scripts/ralph-bridge.service` (systemd unit with EnvironmentFile)
 - [x] Add `tools/scripts/ralph-bridge.state.json` to `gsnake-n8n/.gitignore`
-- [ ] Create `tools/n8n-flows/ralph-loop.json` (Execute Workflow Trigger entry)
+- [x] Create `tools/n8n-flows/ralph-loop.json` (Execute Workflow Trigger entry)
 - [ ] Add `extra_hosts: - "host-gateway:host-gateway"` to n8n docker-compose
 - [ ] Deploy docker-compose change: `docker compose down && docker compose up -d`
-- [ ] Complete `ralph-loop-auth` implementation checklist first
+- [x] Complete `ralph-loop-auth` implementation checklist first
 - [ ] Start bridge and verify `GET /status` responds
 - [ ] Import workflows: `./tools/scripts/sync-workflows.sh import`
 - [ ] Activate `ralph-loop` in n8n UI
 - [ ] Test Cases 1–7 from Testing section pass
-- [ ] Update `CLAUDE.md` SOP mapping table
-- [ ] Set `implementation_status: implemented` in this file's frontmatter
+- [x] Update `CLAUDE.md` SOP mapping table
+- [x] Set `implementation_status: implemented` in this file's frontmatter

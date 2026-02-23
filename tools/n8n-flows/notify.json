@@ -1,10 +1,10 @@
 {
-  "updatedAt": "2026-02-21T17:03:31.325Z",
+  "updatedAt": "2026-02-21T21:42:18.000Z",
   "createdAt": "2026-02-21T16:38:10.491Z",
   "id": "notify",
   "name": "Notify",
   "description": null,
-  "active": false,
+  "active": true,
   "isArchived": false,
   "nodes": [
     {
@@ -212,9 +212,9 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "eaa23062-9562-46d3-a938-ef765e91e0f1",
-  "activeVersionId": null,
-  "versionCounter": 4,
+  "versionId": "f1673b5a-3c80-4bad-92c7-5e729a60799a",
+  "activeVersionId": "f1673b5a-3c80-4bad-92c7-5e729a60799a",
+  "versionCounter": 7,
   "triggerCount": 0,
   "tags": [],
   "shared": [

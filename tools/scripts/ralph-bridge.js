@@ -281,6 +281,7 @@ function spawnCli(state, jobId) {
   activeChild = child;
   abortRequested = false;
   timedOut = false;
+  let errorFired = false;
   if (child.stdin) {
     child.stdin.end();
   }
@@ -314,6 +315,10 @@ function spawnCli(state, jobId) {
   }, timeoutMs);
 
   child.on('close', (exitCode, signal) => {
+    if (errorFired) {
+      log(`Skipping close callback for job ${jobId} (spawn error already handled)`);
+      return;
+    }
     log(`CLI exited: exitCode=${exitCode}, signal=${signal}, job=${jobId}`);
     clearIterationTimer();
     const wasAborted = abortRequested;
@@ -346,6 +351,7 @@ function spawnCli(state, jobId) {
   });
 
   child.on('error', (error) => {
+    errorFired = true;
     logError(`Failed to spawn ${command}: ${error.message}`);
     clearIterationTimer();
     abortRequested = false;
